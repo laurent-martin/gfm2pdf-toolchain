@@ -14,13 +14,8 @@ variables:
   monofont: "DejaVu Sans Mono"
   urlcolor: blue
   geometry: margin=12mm
-  # Fonts for characters missing in the main fonts, e.g. 🔑: macOS, then Linux
-  mainfontfallback:
-    - "Apple Color Emoji:mode=harf"
-    - "Noto Color Emoji:mode=harf"
-  monofontfallback:
-    - "Apple Color Emoji:mode=harf"
-    - "Noto Color Emoji:mode=harf"
+  # mainfontfallback and monofontfallback (e.g. emoji 🔑): set by lib/pandoc.rb for the platform, a missing font is a
+  # fatal error of luaotfload
 include-in-header:
   - ${.}/pdf_in_header.tex
 include-after-body:

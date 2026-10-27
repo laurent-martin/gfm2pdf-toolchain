@@ -272,7 +272,10 @@ module Gfm2Pdf
     graphics_path.write("\\usepackage{graphicx}\n\\graphicspath{#{[theme, '.'].compact.map { |dir| "{#{dir}/}" }.join}}\n")
     # After the defaults: headers follow the order of the arguments, and the cover of the theme redefines a command of latex/pdf_in_header.tex
     headers = [graphics_path, theme_file(theme, 'cover.tex')].compact
-    run('pandoc', *args, *headers.map { |f| "--include-in-header=#{f}" }, "--output=#{pdf}", source)
+    # Only the font of the platform: luaotfload fails on a missing fallback font.
+    # Before the defaults: the variables of a theme or a document replace them.
+    fallbacks = %w[mainfontfallback monofontfallback].map { |name| "--variable=#{name}:#{emoji_font}:mode=harf" }
+    run('pandoc', *fallbacks, *args, *headers.map { |f| "--include-in-header=#{f}" }, "--output=#{pdf}", source)
   ensure
     # Created by LaTeX package svg
     FileUtils.rm_rf('svg-inkscape')
