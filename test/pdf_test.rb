@@ -127,12 +127,12 @@ class PdfTest < Minitest::Test
     require_command('lualatex')
     with_fixtures do |dir|
       (dir / 'Makefile').write(<<~MAKEFILE)
-        GFM2PDF_DIR ?= #{ROOT}
-        include $(GFM2PDF_DIR)/pandoc.mak
+        GFM2PDF_HOME = #{ROOT}
+        include $(GFM2PDF_HOME)/pandoc.mak
         all: sample.pdf
         other.pdf: GFM2PDF_ENGINE = typst
         show-dir:
-        \t@echo "dir=$(GFM2PDF_DIR)"
+        \t@echo "dir=$(GFM2PDF_HOME)"
         show-deps:
         \t@echo "$(GFM2PDF_DEPS)"
       MAKEFILE

@@ -3,7 +3,7 @@
 #   GFM2PDF_ENGINE  latex (default) or typst, can be set per target, e.g. `manual.pdf: GFM2PDF_ENGINE = typst`
 # Optional, set before including:
 #   GFM2PDF_THEME             theme folder (cover, fonts, ...), its files are dependencies of the documents,
-#                             e.g. `GFM2PDF_THEME ?= ../brand/pdf_theme`
+#                             e.g. `GFM2PDF_THEME ?= pdf_theme`
 #   GFM2PDF_VERSION_REQUIRED  version of the toolchain required by the project, e.g. `~> 1.0`
 # Defines GFM2PDF_VERSION: version of the toolchain.
 # Variables of this file start with GFM2PDF_, so that they do not change the ones of the including Makefile.

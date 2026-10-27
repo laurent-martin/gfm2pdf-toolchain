@@ -29,18 +29,20 @@ Sans Mono for code, a [theme](#themes) can set others. For emoji: Apple Color Em
 1. Create a `Makefile` like this:
 
     ```makefile
-    GFM2PDF_DIR ?= ../gfm2pdf-toolchain
-    include $(GFM2PDF_DIR)/pandoc.mak
+    ifndef GFM2PDF_HOME
+    $(error The environment variable GFM2PDF_HOME is not set. Please set it and try again.)
+    endif
+    include $(GFM2PDF_HOME)/pandoc.mak
     all: README.pdf
     clean:
         rm -f README.pdf
     ```
 
-    `GFM2PDF_DIR` is the folder of this repository: for example a `git` submodule of the project, at the version used
-    by the project. To use another copy, set the env var `GFM2PDF_DIR`, e.g. for a copy shared by several projects:
+    The env var `GFM2PDF_HOME` is the folder of this repository, at the version used by the project, e.g. a clone
+    shared by several projects, set in the shell profile, or a checkout at a tag in CI:
 
     ```shell
-    export GFM2PDF_DIR=$HOME/workspace/gfm2pdf-toolchain
+    export GFM2PDF_HOME=$HOME/workspace/gfm2pdf-toolchain
     ```
 
     There is a default target for `%.pdf` from `%.md`.
@@ -56,11 +58,11 @@ Sans Mono for code, a [theme](#themes) can set others. For emoji: Apple Color Em
 Without `make`, call the script directly:
 
 ```shell
-ruby lib/pandoc.rb pdf README.md README.pdf
-ruby lib/pandoc.rb html README.md README.html
-ruby lib/pandoc.rb check-anchors README.md
-ruby lib/pandoc.rb deps
-ruby lib/pandoc.rb version
+ruby $GFM2PDF_HOME/lib/pandoc.rb pdf README.md README.pdf
+ruby $GFM2PDF_HOME/lib/pandoc.rb html README.md README.html
+ruby $GFM2PDF_HOME/lib/pandoc.rb check-anchors README.md
+ruby $GFM2PDF_HOME/lib/pandoc.rb deps
+ruby $GFM2PDF_HOME/lib/pandoc.rb version
 ```
 
 `check-anchors` checks that internal links (`[text](#anchor)`) match a heading, both on GitHub and in the PDF: GitHub
@@ -152,8 +154,8 @@ Select the theme with the env var or `make` variable `GFM2PDF_THEME`. In a `Make
 overrides it:
 
 ```makefile
-GFM2PDF_THEME ?= ../brand/pdf_theme
-include $(GFM2PDF_DIR)/pandoc.mak
+GFM2PDF_THEME ?= pdf_theme
+include $(GFM2PDF_HOME)/pandoc.mak
 ```
 
 Example of a theme, with images at the top and bottom of the cover and last pages, and other fonts:
@@ -224,9 +226,9 @@ text. In draw.io SVG files, labels are HTML (`foreignObject`), that `inkscape` a
 colors use CSS `light-dark()` (for dark mode), that `typst` renders in black.
 
 ```makefile
-include $(GFM2PDF_DIR)/pandoc.mak
+include $(GFM2PDF_HOME)/pandoc.mak
 DRAWIO_FILE = images/diagrams.drawio
-include $(GFM2PDF_DIR)/drawio.mak
+include $(GFM2PDF_HOME)/drawio.mak
 all: diagrams README.pdf
 README.pdf: $(DRAWIO_IMAGES)
 ```
@@ -245,15 +247,15 @@ the branch `main`. The changes of each version are in [CHANGELOG.md](CHANGELOG.m
 | `Y` (minor) | new features, visible changes of the rendering, e.g. default fonts |
 | `Z` (patch) | fixes |
 
-A project uses a version of the toolchain, e.g. a `git` submodule or a CI checkout at a tag, or a copy shared by
-several projects. It can check that this version meets its requirement:
+A project uses a version of the toolchain, in `GFM2PDF_HOME`: e.g. a copy shared by several projects, or a CI
+checkout at a tag. It can check that this version meets its requirement:
 
 ```makefile
 GFM2PDF_VERSION_REQUIRED ?= ~> 1.0
-include $(GFM2PDF_DIR)/pandoc.mak
+include $(GFM2PDF_HOME)/pandoc.mak
 ```
 
-In Ruby: `Gfm2Pdf.check_version('~> 1.0')`, from the shell: `ruby lib/pandoc.rb version '~> 1.0'`.
+In Ruby: `Gfm2Pdf.check_version('~> 1.0')`, from the shell: `ruby $GFM2PDF_HOME/lib/pandoc.rb version '~> 1.0'`.
 Requirements use the [RubyGems syntax](https://guides.rubygems.org/patterns/#declaring-dependencies): `~> 1.0` means
 `>= 1.0` and `< 2.0`, and `>= 1.1, < 3` is a range. A version `X.Y.Z.pre` is lower than `X.Y.Z`.
 `pandoc.mak` defines `GFM2PDF_VERSION`: the version of the toolchain.
