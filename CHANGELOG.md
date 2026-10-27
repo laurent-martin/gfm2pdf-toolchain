@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0.pre
+
+Released: [Place date of release here]
+
+### New
+
+### Changed
+
+### Fixed
+
 ## 1.0.0
 
 Released: 2026-10-27
