@@ -1,0 +1,27 @@
+# Pandoc options for PDF with LuaLaTeX, see https://pandoc.org/MANUAL.html
+to: pdf
+pdf-engine: lualatex
+pdf-engine-opts:
+  - "-shell-escape"
+# table_widths.lua measures inline code before code_break.lua turns it into raw LaTeX
+filters:
+  - ${.}/table_widths.lua
+  - ${.}/code_break.lua
+variables:
+  documentclass: report
+  # Fonts of TeX Live, a theme can set others. Set here, else the fallback fonts are not used.
+  mainfont: "Latin Modern Roman"
+  monofont: "DejaVu Sans Mono"
+  urlcolor: blue
+  geometry: margin=12mm
+  # Fonts for characters missing in the main fonts, e.g. 🔑: macOS, then Linux
+  mainfontfallback:
+    - "Apple Color Emoji:mode=harf"
+    - "Noto Color Emoji:mode=harf"
+  monofontfallback:
+    - "Apple Color Emoji:mode=harf"
+    - "Noto Color Emoji:mode=harf"
+include-in-header:
+  - ${.}/pdf_in_header.tex
+include-after-body:
+  - ${.}/pdf_after_body.tex

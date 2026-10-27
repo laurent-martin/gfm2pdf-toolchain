@@ -1,0 +1,19 @@
+# Pandoc options for PDF with Typst, see https://pandoc.org/MANUAL.html
+# pandoc writes Typst source, then lib/pandoc.rb compiles it with `typst compile`.
+# The template (report.typ) is set by lib/pandoc.rb: `${.}` is not expanded in variables.
+to: typst
+standalone: true
+syntax-highlighting: idiomatic
+filters:
+  - ${.}/table_auto.lua
+variables:
+  papersize: us-letter
+  fontsize: 10pt
+  # Fonts embedded in Typst, a theme can set others
+  mainfont: "New Computer Modern"
+  codefont: "DejaVu Sans Mono"
+  margin:
+    x: 12mm
+    y: 12mm
+include-in-header:
+  - ${.}/admonition.typ

@@ -1,0 +1,3 @@
+# Pandoc options of the theme for PDF with Typst
+variables:
+  mainfont: "Libertinus Serif"

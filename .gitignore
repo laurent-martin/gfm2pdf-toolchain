@@ -1,0 +1,3 @@
+# Temporary files of lib/pandoc.rb, if interrupted
+.tmp.*
+svg-inkscape/

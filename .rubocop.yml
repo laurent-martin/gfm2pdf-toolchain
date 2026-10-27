@@ -1,0 +1,178 @@
+# Same style as aspera-cli (https://github.com/IBM/aspera-cli): .rubocop.yml and .rubocop_todo.yml merged
+plugins:
+  - rubocop-performance
+inherit_gem:
+  rubocop-shopify: rubocop.yml
+AllCops:
+  SuggestExtensions: true
+  TargetRubyVersion: 3.1
+  NewCops: enable
+Layout/HashAlignment:
+  EnforcedHashRocketStyle: table
+  EnforcedColonStyle: table
+Layout/LineLength:
+  Max: 170
+Layout/SpaceAfterComma:
+  Enabled: true
+Layout/EmptyLineAfterGuardClause:
+  Enabled: false
+Metrics/PerceivedComplexity:
+  Enabled: true
+  Max: 65
+Metrics/ParameterLists:
+  Max: 6
+Metrics/BlockNesting:
+  Max: 5
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: no_comma
+Style/StringLiterals:
+  EnforcedStyle: single_quotes
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: single_quotes
+Style/BarePercentLiterals:
+  EnforcedStyle: percent_q
+Style/NumericLiteralPrefix:
+  EnforcedOctalStyle: zero_with_o
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: no_comma
+Style/DateTime:
+  Enabled: true
+Style/ReturnNil:
+  Enabled: true
+  EnforcedStyle: return
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: no_comma
+Style/Encoding:
+  Enabled: true
+Style/OneClassPerFile:
+  Enabled: false
+Lint/RedundantCopDisableDirective:
+  Enabled: true
+Metrics/ClassLength:
+  Enabled: true
+  Max: 1300
+Metrics/MethodLength:
+  Enabled: true
+  Max: 105
+Metrics/AbcSize:
+  Enabled: false
+Layout/SpaceBeforeBlockBraces:
+  Enabled: true
+  EnforcedStyle: space
+Layout/SpaceInsideBlockBraces:
+  Enabled: true
+  EnforcedStyle: space
+Layout/SpaceAroundBlockParameters:
+  Enabled: true
+  EnforcedStyleInsidePipes: no_space
+Layout/SpaceInsideHashLiteralBraces:
+  Enabled: true
+  EnforcedStyle: no_space
+Layout/MultilineHashBraceLayout:
+  Enabled: true
+Layout/MultilineArrayBraceLayout:
+  Enabled: true
+Layout/MultilineMethodArgumentLineBreaks:
+  Enabled: false
+Layout/MultilineArrayLineBreaks:
+  Enabled: false
+Layout/FirstHashElementLineBreak:
+  Enabled: true
+Layout/FirstArrayElementLineBreak:
+  Enabled: false
+Layout/MultilineHashKeyLineBreaks:
+  Enabled: false
+Layout/MultilineMethodCallBraceLayout:
+  Enabled: true
+Style/IfUnlessModifier:
+  Enabled: true
+Style/RescueModifier:
+  Enabled: false
+Style/Lambda:
+  Enabled: false
+Style/CommentedKeyword:
+  Enabled: true
+Style/NegatedIf:
+  Enabled: false
+Style/SingleLineMethods:
+  Enabled: false
+Style/RedundantReturn:
+  Enabled: false
+Style/StringConcatenation:
+  Enabled: true
+Style/StderrPuts:
+  Enabled: true
+Metrics/BlockLength:
+  Enabled: false
+Layout/SpaceAroundEqualsInParameterDefault:
+  Enabled: true
+Style/Documentation:
+  Enabled: false
+Metrics/CyclomaticComplexity:
+  Enabled: false
+Layout/DotPosition:
+  Enabled: true
+Layout/AssignmentIndentation:
+  Enabled: true
+Layout/SpaceAroundOperators:
+  Enabled: true
+Layout/EmptyLinesAroundAttributeAccessor:
+  Enabled: true
+Layout/LeadingCommentSpace:
+  Enabled: true
+Layout/FirstHashElementIndentation:
+  Enabled: true
+Layout/CaseIndentation:
+  Enabled: true
+Layout/SpaceAfterSemicolon:
+  Enabled: true
+Layout/FirstArgumentIndentation:
+  Enabled: true
+Style/WordArray:
+  Enabled: true
+  EnforcedStyle: percent
+Style/SymbolArray:
+  Enabled: true
+  EnforcedStyle: percent
+Style/PreferredHashMethods:
+  Enabled: true
+Style/CommentAnnotation:
+  Enabled: true
+Style/RegexpLiteral:
+  Enabled: true
+  AllowInnerSlashes: false
+Style/Semicolon:
+  Enabled: true
+Style/HashEachMethods:
+  Enabled: true
+Style/SafeNavigation:
+  Enabled: true
+Style/RedundantBegin:
+  Enabled: true
+Layout/ArgumentAlignment:
+  Enabled: true
+Layout/MultilineOperationIndentation:
+  Enabled: true
+  EnforcedStyle: indented
+Style/LambdaCall:
+  Enabled: true
+Style/MethodCallWithoutArgsParentheses:
+  Enabled: true
+Layout/EmptyLineAfterMagicComment:
+  Enabled: true
+Style/ClassAndModuleChildren:
+  Enabled: true
+Lint/DuplicateBranch: # (new in 1.3)
+  Enabled: true
+Lint/EmptyClass: # (new in 1.3)
+  Enabled: true
+Style/DocumentDynamicEvalDefinition: # (new in 1.1)
+  Enabled: true
+Style/NegatedIfElseCondition: # (new in 1.2)
+  Enabled: true
+Style/NegatedWhile:
+  Enabled: true
+Security/Eval:
+  Enabled: true
+Naming/PredicateMethod:
+  Enabled: false

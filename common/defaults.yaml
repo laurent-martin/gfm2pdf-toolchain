@@ -1,0 +1,17 @@
+# Pandoc options common to all outputs, see https://pandoc.org/MANUAL.html
+# Output specific options: <output>/defaults.yaml, their filters run after these ones.
+#verbosity: INFO
+#we do not use `gfm` because it does not format tables well in pdf output
+# no short (MultiMarkdown) subscripts: `~600 ms` or `~/.ssh` would become subscripts; `H~2~O` still works
+from: markdown_mmd-short_subsuperscripts
+toc: true
+number-sections: true
+shift-heading-level-by: -1
+resource-path:
+  - ${.}
+  - ..
+filters:
+  - ${.}/find_admonition.lua
+  - ${.}/gfm_admonition.lua
+  - ${.}/break_replace.lua
+  - ${.}/pdf_instead_of_svg.lua

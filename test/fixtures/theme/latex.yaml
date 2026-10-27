@@ -1,0 +1,3 @@
+# Pandoc options of the theme for PDF with LuaLaTeX
+variables:
+  mainfont: "Latin Modern Sans"
