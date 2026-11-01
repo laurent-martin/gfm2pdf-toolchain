@@ -4,13 +4,16 @@
 # Generate PDF (with Typst or LuaLaTeX) or HTML from Markdown using pandoc, see README.md
 
 require 'date'
+require 'digest'
 require 'fileutils'
 require 'json'
 require 'logger'
+require 'net/http'
 require 'open3'
 require 'pathname'
 require 'set'
 require 'tmpdir'
+require 'uri'
 require 'yaml'
 
 module Gfm2Pdf
@@ -204,6 +207,52 @@ module Gfm2Pdf
     end
   end
 
+  # Maximum number of HTTP redirections followed when downloading an image
+  MAX_REDIRECTS = 5
+  # File extension by media type, for a downloaded image whose URL has none
+  IMAGE_EXTENSIONS = {'image/png' => '.png', 'image/jpeg' => '.jpg', 'image/gif' => '.gif', 'image/svg+xml' => '.svg', 'image/webp' => '.webp'}.freeze
+
+  # Download a file by HTTP
+  # @param url       [String]  URL
+  # @param redirects [Integer] Remaining redirections to follow
+  # @return [Array(String, String)] Content, and media type
+  # @raise [RuntimeError] if the download fails
+  def http_get(url, redirects = MAX_REDIRECTS)
+    uri = URI.parse(url)
+    response = Net::HTTP.get_response(uri)
+    case response
+    when Net::HTTPSuccess then [response.body, response['content-type'].to_s.split(';').first.to_s.strip.downcase]
+    when Net::HTTPRedirection
+      raise "Too many redirections: #{url}" if redirects.zero?
+      http_get(URI.join(url, response['location']).to_s, redirects - 1)
+    else raise "#{url}: HTTP #{response.code}"
+    end
+  rescue SystemCallError, SocketError, Timeout::Error, URI::InvalidURIError, OpenSSL::SSL::SSLError => e
+    raise "#{url}: #{e.message}"
+  end
+
+  # Download the remote images of a Markdown text: PDF engines cannot always fetch them (Typst has no network access)
+  # @param content [String]   Markdown text
+  # @param folder  [Pathname] Folder where the images are saved
+  # @return [String] Markdown text with the images `![alt](http...)` replaced by the downloaded files
+  # @raise [RuntimeError] if a download fails
+  def download_images(content, folder)
+    files = {}
+    content.gsub(%r{(!\[[^\]]*\]\()(https?://[^)\s]+)}) do
+      prefix = Regexp.last_match(1)
+      url = Regexp.last_match(2)
+      files[url] ||= begin
+        log.info { "Downloading: #{url}" }
+        body, type = http_get(url)
+        extension = File.extname(URI.parse(url).path)
+        extension = IMAGE_EXTENSIONS.fetch(type, '') if extension.empty?
+        folder.mkpath
+        folder.join("#{Digest::SHA256.hexdigest(url)[0, 16]}#{extension}").tap { |file| file.binwrite(body) }
+      end
+      "#{prefix}#{files[url]}"
+    end
+  end
+
   # Font for characters missing in the main fonts, e.g. emoji
   # @return [String]
   def emoji_font
@@ -224,7 +273,10 @@ module Gfm2Pdf
       tmp = Pathname.new(tmp)
       Dir.chdir(md.dirname) do
         source = tmp / md.basename
-        source.write(convert_img_for_pandoc(md.read))
+        content = convert_img_for_pandoc(md.read)
+        # HTML references the remote images
+        content = download_images(content, tmp / 'images') if output.eql?('pdf')
+        source.write(content)
         target = engine || output
         # The options of the theme come before the ones of the document
         defaults = [ROOT / 'common/defaults.yaml', ROOT / target / 'defaults.yaml', theme_file(theme, "#{target}.yaml")].compact

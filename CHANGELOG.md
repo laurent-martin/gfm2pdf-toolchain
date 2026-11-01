@@ -10,6 +10,8 @@ Released: [Place date of release here]
 
 ### Fixed
 
+- PDF: remote images (`![alt](https://...)`) are downloaded, Typst has no network access.
+
 ## 1.0.0
 
 Released: 2026-10-27

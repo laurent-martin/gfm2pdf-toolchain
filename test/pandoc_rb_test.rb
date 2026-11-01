@@ -80,6 +80,28 @@ class PandocRbTest < Minitest::Test
     assert_equal('![](a.svg)', Gfm2Pdf.convert_img_for_pandoc("<img src='a.svg'>"))
   end
 
+  def test_download_images
+    Dir.mktmpdir do |dir|
+      folder = Pathname.new(dir) / 'images'
+      calls = []
+      # No network in tests
+      Gfm2Pdf.define_singleton_method(:http_get) do |url, *|
+        calls << url
+        ['PNG', 'image/png']
+      end
+      text = Gfm2Pdf.download_images('![a](https://x.test/a.png) ![b](https://x.test/b?id=1) ![c](https://x.test/a.png) ![d](local.png)', folder)
+      files = text.scan(/\(([^)]+)\)/).flatten
+      assert_equal(['https://x.test/a.png', 'https://x.test/b?id=1'], calls)
+      assert_equal(files[0], files[2])
+      assert(files[0].end_with?('.png'))
+      assert(files[1].end_with?('.png'), 'extension from the media type')
+      assert_equal('local.png', files[3])
+      assert_equal('PNG', Pathname.new(files[0]).read)
+    ensure
+      Gfm2Pdf.singleton_class.send(:remove_method, :http_get)
+    end
+  end
+
   def test_dependencies
     deps = Gfm2Pdf.dependencies(nil)
     %w[common/defaults.yaml latex/pdf_in_header.tex typst/report.typ lib/pandoc.rb].each do |file|
