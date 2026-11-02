@@ -72,6 +72,8 @@ and `pandoc` generate heading identifiers differently (e.g. `.` is kept by `pand
 `renumber-figures` rewrites the Markdown file: figure captions 1, 2, 3... in the order of the document, and the
 mentions `Figure <number>` follow their figure (not in code, nor `Figure 2 of RFC 1234`). It lists the changes, and
 the mentions it cannot renumber: number of several figures, or of none. Review them with `git diff`.
+It changes nothing if a mention it cannot renumber would then refer to another figure, e.g. a caption `Figure 2` of
+code (not a figure) between figures 1 and 3: rename it first, e.g. `Listing 2`.
 `deps` lists the files of the toolchain and of the theme: `pandoc.mak` makes the generated documents depend on them.
 
 Messages go to stderr, set `GFM2PDF_LOG_LEVEL` (`debug`, `info`, `warn`, `error`) to change the level (default:
@@ -243,6 +245,8 @@ Example of a theme, with images at the top and bottom of the cover and last page
 - To add a figure, give it a number not used yet, e.g. `*Figure 0: New diagram*`, mention it as `Figure 0`, then
   run `renumber-figures` (see [Usage](#usage)): the captions become 1, 2, 3... in the order of the document, and each
   mention follows its figure. With a number already used, mentions of it would be ambiguous: they are not renumbered.
+- Only images are figures. For a caption of code, use another name, e.g. `*Listing 1: Sample configuration*` after
+  the code block, or `Table 1` for a table: they are text, numbered by hand, and do not take figure numbers.
 
 - Inline code breaks at the end of a line only after separators (`/`, `=`, `,`, `.`, `_`, ...), not after hyphens:
   `--transfer=direct` never breaks after `--`.

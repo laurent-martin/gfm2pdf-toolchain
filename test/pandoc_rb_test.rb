@@ -320,6 +320,22 @@ class PandocRbTest < Minitest::Test
     assert_equal(['9: Figure 1 not renumbered: several figures have this number', '9: Figure 9 not renumbered: no figure has this number'], skipped)
   end
 
+  # Caption `Figure 2` of code, between figures 1 and 3: not renumbered, it would refer to figure 3 renumbered 2
+  def test_renumber_figures_mention_taken
+    markdown = "![a](a.png)\n\n*Figure 1: a*\n\n```yaml\nkey: value\n```\n\n*Figure 2: code*\n\n![b](b.png)\n\n*Figure 3: b*\n\nSee Figure 2 and Figure 3.\n"
+    with_markdown(markdown) do |md|
+      error = assert_raises(RuntimeError) { Gfm2Pdf.renumber_figures(md) }
+      assert_includes(error.message, "#{md}: not changed, mentions that would refer to another figure: line 9: Figure 2, line 15: Figure 2.")
+      assert_includes(error.message, 'Change them by hand (e.g. `Listing` for a caption of code), then renumber')
+      assert_equal(markdown, md.read)
+    end
+    # renamed: renumbered
+    after, changes, skipped = renumber(markdown.gsub('Figure 2', 'Listing 1'))
+    assert_includes(after, "*Figure 2: b*\n\nSee Listing 1 and Figure 2.\n")
+    assert_equal(2, changes.length)
+    assert_empty(skipped)
+  end
+
   # Same captions as common/figure_caption.lua, also HTML images and alt text
   def test_renumber_figures_caption_forms
     forms = MANUAL_CAPTIONS.merge(

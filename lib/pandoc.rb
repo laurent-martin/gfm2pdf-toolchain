@@ -558,7 +558,8 @@ module Gfm2Pdf
   # To add a figure, give it a number not used yet, e.g. `Figure 0`, mention it so, then renumber.
   # @param md [Pathname] Path to Markdown file, rewritten if a number changes
   # @return [Array(Array<String>, Array<String>)] Changes, and mentions not renumbered: `<file>:<line>: <message>`
-  # @raise [RuntimeError] if the captions found in the text are not the figures of pandoc: the file is not changed
+  # @raise [RuntimeError] if the captions found in the text are not the figures of pandoc, or if a mention not
+  #   renumbered would refer to another figure: the file is not changed
   def renumber_figures(md)
     md = Pathname.new(md)
     text = md.read
@@ -577,8 +578,16 @@ module Gfm2Pdf
       next if text.match?(OTHER_DOCUMENT, m.end(0))
       old = m[3].to_i
       next targets << [m, renumber[old]] if renumber[old]
-      skipped << "#{where.call(m)}: Figure #{old} not renumbered: #{counts[old] ? 'several figures have this number' : 'no figure has this number'}"
+      skipped << [m, old]
     end
+    # A mention not renumbered keeps its number: it must not become the one of another figure, e.g. caption `Figure 2`
+    # of code (not a figure), between figures 1 and 3 that become 1 and 2
+    taken = skipped.select { |_, old| old.between?(1, numbers.length) && !numbers[old - 1].eql?(old) }
+    unless taken.empty?
+      list = taken.map { |m, old| "line #{where.call(m)[/\d+\z/]}: Figure #{old}" }.join(', ')
+      raise "#{md}: not changed, mentions that would refer to another figure: #{list}. Change them by hand (e.g. `Listing` for a caption of code), then renumber"
+    end
+    skipped = skipped.map { |m, old| "#{where.call(m)}: Figure #{old} not renumbered: #{counts[old] ? 'several figures have this number' : 'no figure has this number'}" }
     targets = targets.reject { |m, new| m[3].to_i.eql?(new) }.sort_by { |m, _| m.begin(3) }
     changes = targets.map { |m, new| "#{where.call(m)}: Figure #{m[3]} -> Figure #{new}" }
     targets.reverse_each { |m, new| text[m.begin(3)...m.end(3)] = new.to_s }
