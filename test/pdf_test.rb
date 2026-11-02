@@ -67,6 +67,30 @@ class PdfTest < Minitest::Test
     check_pdf('latex')
   end
 
+  # Symbol missing in the main font and in the emoji font, in text and in code: shown with a fallback font, not dropped.
+  # LaTeX: the fallback fonts of TeX Live set by lib/pandoc.rb, Typst: its own fallback to any font that has it.
+  def check_symbol_fallback(engine)
+    with_fixtures do |dir|
+      md = dir / 'symbol.md'
+      md.write("# Symbols\n\n## Mark\n\nNot saved: ●.\n\n```\ncode: ●\n```\n")
+      pdf = dir / 'out/symbol.pdf'
+      Gfm2Pdf.markdown_to_pdf(md: md, pdf: pdf, engine: engine)
+      text = pdf_text(pdf)
+      assert_includes(text, 'Not saved: ●.')
+      assert_includes(text, 'code: ●')
+    end
+  end
+
+  def test_typst_symbol_fallback
+    require_command('typst')
+    check_symbol_fallback('typst')
+  end
+
+  def test_latex_symbol_fallback
+    require_command('lualatex')
+    check_symbol_fallback('latex')
+  end
+
   # Background of the cover and last pages, and fonts: from the theme only
   # @param font [String] Main font of the theme, as named in the PDF
   def check_theme(engine, font)

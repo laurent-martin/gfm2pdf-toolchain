@@ -15,6 +15,8 @@ Released: [Place date of release here]
 ### Fixed
 
 - PDF: remote images (`![alt](https://...)`) are downloaded, Typst has no network access.
+- PDF with LaTeX: characters missing in the main fonts and in the emoji font, e.g. `●`, are shown with DejaVu Sans,
+  or DejaVu Sans Mono in code (TeX Live), instead of being dropped.
 
 ## 1.0.0
 

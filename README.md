@@ -21,7 +21,8 @@ The PDF engine is LuaLaTeX (default) or [Typst](https://typst.app).
 
 Fonts: the default ones come with the PDF engine: Latin Modern (TeX Live), New Computer Modern (Typst), and DejaVu
 Sans Mono for code, a [theme](#themes) can set others. For emoji: Apple Color Emoji (macOS) or Noto Color Emoji
-(Linux).
+(Linux). For other characters missing in the main fonts, e.g. `●`: with LuaLaTeX, DejaVu Sans and DejaVu Sans Mono
+(TeX Live), with Typst, any font that has them.
 
 ## Usage
 

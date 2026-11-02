@@ -259,6 +259,9 @@ module Gfm2Pdf
     RUBY_PLATFORM.include?('darwin') ? 'Apple Color Emoji' : 'Noto Color Emoji'
   end
 
+  # Fonts of TeX Live for symbols missing in the main fonts and in the emoji font, e.g. `●`, by fallback variable of LaTeX
+  SYMBOL_FONTS = {'mainfontfallback' => 'DejaVu Sans', 'monofontfallback' => 'DejaVu Sans Mono'}.freeze
+
   # Prepare the conversion of a Markdown file, and call the block in its folder (its relative paths are relative to it)
   # @param md       [Pathname] Path to Markdown file
   # @param output   [String]   `pdf` or `html`
@@ -324,9 +327,9 @@ module Gfm2Pdf
     graphics_path.write("\\usepackage{graphicx}\n\\graphicspath{#{[theme, '.'].compact.map { |dir| "{#{dir}/}" }.join}}\n")
     # After the defaults: headers follow the order of the arguments, and the cover of the theme redefines a command of latex/pdf_in_header.tex
     headers = [graphics_path, theme_file(theme, 'cover.tex')].compact
-    # Only the font of the platform: luaotfload fails on a missing fallback font.
-    # Before the defaults: the variables of a theme or a document replace them.
-    fallbacks = %w[mainfontfallback monofontfallback].map { |name| "--variable=#{name}:#{emoji_font}:mode=harf" }
+    # Fonts of the platform or of TeX Live only: luaotfload fails on a missing fallback font.
+    # In order: emoji, then symbols. Before the defaults: the variables of a theme or a document replace them.
+    fallbacks = SYMBOL_FONTS.flat_map { |name, font| [emoji_font, font].map { |fallback| "--variable=#{name}:#{fallback}:mode=harf" } }
     run('pandoc', *fallbacks, *args, *headers.map { |f| "--include-in-header=#{f}" }, "--output=#{pdf}", source)
   ensure
     # Created by LaTeX package svg

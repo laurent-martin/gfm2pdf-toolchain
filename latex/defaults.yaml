@@ -14,8 +14,8 @@ variables:
   monofont: "DejaVu Sans Mono"
   urlcolor: blue
   geometry: margin=12mm
-  # mainfontfallback and monofontfallback (e.g. emoji 🔑): set by lib/pandoc.rb for the platform, a missing font is a
-  # fatal error of luaotfload
+  # mainfontfallback and monofontfallback (emoji 🔑 of the platform, then symbols ● with DejaVu Sans and DejaVu Sans
+  # Mono): set by lib/pandoc.rb, a missing font is a fatal error of luaotfload
 include-in-header:
   - ${.}/pdf_in_header.tex
 include-after-body:
