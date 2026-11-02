@@ -405,6 +405,134 @@ module Gfm2Pdf
     log.info { "#{md}: internal links OK" }
   end
 
+  # Figure numbers in the Markdown text, same rules as common/figure_caption.lua (test/pandoc_rb_test.rb runs both).
+  # `Figure <number>`: not in a word (`Subfigure 1`), plain number (not `1.2`, `3a`), on one line or on two.
+  # Groups: word `Figure` or `figure`, separator, number.
+  FIGURE_NUMBER = /(?<![A-Za-z0-9])([Ff]igure)([ \t]+|[ \t]*\n[ \t>]*)(\d+)(?![A-Za-z0-9])(?!\.[A-Za-z0-9])/
+  # After the number: figure of another document, e.g. `Figure 2 of RFC 1234`
+  OTHER_DOCUMENT = /\G[ \t]+of(?=\s|\z)/
+  # Start of a line, before an image: quote, indentation, list item
+  LINE_START = '[ \t>]*(?:(?:[-*+]|\d+[.)])[ \t]+)?'
+  # Image alone on its line: Markdown, or HTML (see convert_img_for_pandoc)
+  IMAGE_LINE = /\A#{LINE_START}(?:!\[.*\]\(.*\)|<img\s[^>]*>)[ \t]*\z/
+  # Before the number of a caption that is the alt text of an image
+  ALT_CAPTION_PREFIX = /\A#{LINE_START}!\[\z/
+  # Before the number of a manual caption: quote, indentation, emphasis
+  CAPTION_PREFIX = /\A[ \t>]*[*_]*\z/
+
+  # Numbers of the figures of a Markdown file, as parsed by pandoc with the filters of the toolchain
+  # @param md [Pathname] Path to Markdown file
+  # @return [Array<Integer>] Plain numbers of the captions `Figure <number>`, in the order of the document
+  def pandoc_figure_numbers(md)
+    md = Pathname.new(md).expand_path
+    ast = Dir.mktmpdir('pandoc') do |tmp|
+      source = Pathname.new(tmp) / md.basename
+      source.write(convert_img_for_pandoc(md.read))
+      Dir.chdir(md.dirname) { JSON.parse(run('pandoc', "--defaults=#{ROOT / 'common/defaults.yaml'}", '--to=json', source, capture: true)) }
+    end
+    text = lambda do |node|
+      case node
+      when Array then node.map { |n| text.call(n) }.join
+      when Hash
+        case node['t']
+        when 'Str' then node['c']
+        when 'Space', 'SoftBreak', 'LineBreak' then ' '
+        else text.call(node['c'])
+        end
+      else ''
+      end
+    end
+    numbers = []
+    walk = lambda do |node|
+      case node
+      when Array then node.each { |n| walk.call(n) }
+      when Hash
+        number = text.call(node['c'][1][1])[/\AFigure\s+(\d+)(?![A-Za-z0-9])(?!\.[A-Za-z0-9])/, 1] if node['t'].eql?('Figure')
+        numbers << number.to_i if number
+        node.each_value { |v| walk.call(v) }
+      end
+    end
+    walk.call(ast['blocks'])
+    numbers
+  end
+
+  # Ranges of a Markdown text where figures are not numbered: code blocks, inline code, HTML comments
+  # @param text [String] Markdown text
+  # @return [Array<Range>] Character offsets
+  def figure_free_ranges(text)
+    ranges = []
+    offset = 0
+    fence = nil
+    text.each_line do |line|
+      marker = line.sub(/\A[ \t>]*/, '')
+      if fence
+        ranges << (offset...offset + line.length)
+        fence = nil if marker.match?(/\A#{Regexp.escape(fence[0])}{#{fence.length},}[ \t]*$/)
+      elsif (fence = marker[/\A(?:`{3,}|~{3,})/])
+        ranges << (offset...offset + line.length)
+      end
+      offset += line.length
+    end
+    # HTML comments, inline code: on several lines, but not across an empty line (not a stray backtick)
+    [/<!--.*?-->/m, /(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t>]*\n))+?(?<!`)\1(?!`)/].each do |pattern|
+      text.to_enum(:scan, pattern).each { ranges << (Regexp.last_match.begin(0)...Regexp.last_match.end(0)) }
+    end
+    ranges
+  end
+
+  # @param text  [String]      Markdown text
+  # @param match [MatchData]   Match of FIGURE_NUMBER
+  # @return [Boolean] true if the match is the number of a caption: the alt text of an image alone on its line, or a
+  #   paragraph after it (or its next line), see common/figure_caption.lua
+  def figure_caption?(text, match)
+    return false unless match[1].eql?('Figure')
+    start = match.begin(0)
+    line_start = start.zero? ? 0 : (text.rindex("\n", start - 1)&.+(1) || 0)
+    prefix = text[line_start...start]
+    return text[line_start...(text.index("\n", start) || text.length)].match?(IMAGE_LINE) if prefix.match?(ALT_CAPTION_PREFIX)
+    return false unless prefix.match?(CAPTION_PREFIX)
+    previous = text[0...line_start].lines.map(&:chomp).last(2)
+    # an empty line between the image and the caption, in a quote or not
+    previous.pop if previous.last&.match?(/\A[ \t>]*\z/)
+    previous.last&.match?(IMAGE_LINE) || false
+  end
+
+  # Renumber the figures of a Markdown file: captions 1, 2, 3... in the order of the document, and the mentions
+  # `Figure <number>` in the text follow their figure. Not in code and HTML comments, not `Figure 2 of RFC 1234`.
+  # To add a figure, give it a number not used yet, e.g. `Figure 0`, mention it so, then renumber.
+  # @param md [Pathname] Path to Markdown file, rewritten if a number changes
+  # @return [Array(Array<String>, Array<String>)] Changes, and mentions not renumbered: `<file>:<line>: <message>`
+  # @raise [RuntimeError] if the captions found in the text are not the figures of pandoc: the file is not changed
+  def renumber_figures(md)
+    md = Pathname.new(md)
+    text = md.read
+    numbers = pandoc_figure_numbers(md)
+    free = figure_free_ranges(text)
+    matches = text.to_enum(:scan, FIGURE_NUMBER).map { Regexp.last_match }.reject { |m| free.any? { |r| r.cover?(m.begin(0)) } }
+    captions, mentions = matches.partition { |m| figure_caption?(text, m) }
+    found = captions.map { |m| m[3].to_i }
+    raise "#{md}: figures of pandoc (#{numbers.join(', ')}) not found in the text (#{found.join(', ')}), renumber them by hand" unless found.eql?(numbers)
+    counts = numbers.tally
+    renumber = numbers.each_with_index.to_h { |old, index| [old, index + 1] }.select { |old, _| counts[old].eql?(1) }
+    where = ->(m) { "#{md}:#{text[0, m.begin(3)].count("\n") + 1}" }
+    skipped = []
+    targets = captions.each_with_index.map { |m, index| [m, index + 1] }
+    mentions.each do |m|
+      next if text.match?(OTHER_DOCUMENT, m.end(0))
+      old = m[3].to_i
+      next targets << [m, renumber[old]] if renumber[old]
+      skipped << "#{where.call(m)}: Figure #{old} not renumbered: #{counts[old] ? 'several figures have this number' : 'no figure has this number'}"
+    end
+    targets = targets.reject { |m, new| m[3].to_i.eql?(new) }.sort_by { |m, _| m.begin(3) }
+    changes = targets.map { |m, new| "#{where.call(m)}: Figure #{m[3]} -> Figure #{new}" }
+    targets.reverse_each { |m, new| text[m.begin(3)...m.end(3)] = new.to_s }
+    md.write(text) unless targets.empty?
+    changes.each { |c| log.info(c) }
+    skipped.each { |s| log.warn(s) }
+    log.info { "#{md}: figures already numbered" } if targets.empty?
+    [changes, skipped]
+  end
+
   # Check that the version of the toolchain meets the requirement of a project
   # @param requirement [String] RubyGems syntax, e.g. `~> 1.0`, or a range: `>= 1.1, < 3`
   # @raise [RuntimeError] if the version does not meet it
@@ -424,6 +552,7 @@ if __FILE__ == $PROGRAM_NAME
       pdf <input.md> <output.pdf>    convert Markdown to PDF, engine from env var GFM2PDF_ENGINE: latex (default) or typst
       html <input.md> <output.html>  convert Markdown to HTML
       check-anchors <input.md>       check that internal links match a heading, on GitHub and in the PDF
+      renumber-figures <input.md>    renumber the figures 1, 2, 3... and their mentions `Figure <number>`, in place
       version [<requirement>]        display the version, check that it meets the requirement, e.g. '~> 1.0'
 
     Env var GFM2PDF_THEME: theme folder (cover, fonts, ...) for deps, pdf and html, see README.md
@@ -439,6 +568,7 @@ if __FILE__ == $PROGRAM_NAME
     when 'pdf' then args.length.eql?(2) ? Gfm2Pdf.markdown_to_pdf(md: args[0], pdf: args[1]) : abort(usage)
     when 'html' then args.length.eql?(2) ? Gfm2Pdf.markdown_to_html(md: args[0], html: args[1]) : abort(usage)
     when 'check-anchors' then args.length.eql?(1) ? Gfm2Pdf.check_markdown_anchors(Pathname.new(args[0])) : abort(usage)
+    when 'renumber-figures' then args.length.eql?(1) ? Gfm2Pdf.renumber_figures(args[0]) : abort(usage)
     else abort(usage)
     end
   rescue StandardError => e

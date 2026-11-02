@@ -14,6 +14,17 @@ module TestHelper
   ROOT = Gfm2Pdf::ROOT
   FIXTURES = ROOT / 'test/fixtures'
 
+  # Forms of a manual caption after an image, as shown by GitHub: for common/figure_caption.lua and renumber-figures
+  MANUAL_CAPTIONS = {
+    'italic'         => "![Alt text](x.png)\n\n*Figure 1: Manual caption*\n",
+    'plain'          => "![Alt text](x.png)\n\nFigure 1: Manual caption\n",
+    'quote'          => "![Alt text](x.png)\n\n> Figure 1: Manual caption\n",
+    'quote, no line' => "![Alt text](x.png)\n> Figure 1: Manual caption\n",
+    'next line'      => "![Alt text](x.png)\n*Figure 1: Manual caption*\n",
+    'no alt text'    => "![](x.png)\n\n*Figure 1: Manual caption*\n",
+    'in a list'      => "- item\n\n  ![Alt text](x.png)\n\n  *Figure 1: Manual caption*\n"
+  }.freeze
+
   # Convert Markdown with the pandoc defaults of the toolchain
   # @param markdown [String] Markdown text
   # @param output   [String] Folder of the output specific defaults: `latex`, `typst` or `html`

@@ -14,6 +14,7 @@
 -- number, as on GitHub.
 -- The numbers of the captions, manual or alt text, must be 1, 2, 3... in the order of the document: a warning tells a
 -- gap, a duplicate or a wrong order, e.g. after a figure is added. Only plain numbers: not `Figure 1.2` or `Figure 3a`.
+-- `lib/pandoc.rb renumber-figures` fixes the numbers in the Markdown file, with the same rules: keep them aligned.
 -- A numbered figure gets the identifier `fig-<number>` (unless it has one; `fig-<number>-1` if taken), and a mention
 -- `Figure <number>` in the text links to it, e.g. `see Figure 3.`, with a warning if no figure has this number.
 -- Not linked: headings, captions, text of links and images, `Figure 2 of RFC 1234` (figure of another document).
@@ -163,7 +164,8 @@ function Pandoc(doc)
             if number == nil then return nil end
             if number ~= previous + 1 then
                 local place = previous == 0 and "first numbered figure" or ("after Figure " .. previous)
-                pandoc.log.warn(("Figure %d (%s): expected Figure %d"):format(number, place, previous + 1))
+                pandoc.log.warn(("Figure %d (%s): expected Figure %d, fix: lib/pandoc.rb renumber-figures")
+                    :format(number, place, previous + 1))
             end
             -- continue from the number found: one mistake, one warning
             previous = number

@@ -172,6 +172,118 @@ class PandocRbTest < Minitest::Test
     Gfm2Pdf.log.level = level
   end
 
+  # Renumber the figures of the Markdown, quietly
+  # @return [Array(String, Array<String>, Array<String>)] Markdown after, changes and mentions not renumbered
+  def renumber(markdown)
+    level = Gfm2Pdf.log.level
+    Gfm2Pdf.log.level = :fatal
+    with_markdown(markdown) do |md|
+      changes, skipped = Gfm2Pdf.renumber_figures(md)
+      [md.read, changes.map { |c| c.delete_prefix("#{md}:") }, skipped.map { |s| s.delete_prefix("#{md}:") }]
+    end
+  ensure
+    Gfm2Pdf.log.level = level
+  end
+
+  # A figure added with a number not used yet: the captions and mentions after it follow
+  RENUMBER_BEFORE = <<~MARKDOWN
+    See Figure 2, Figure 0 and figure
+    3.
+
+    ![a](a.png)
+
+    *Figure 1: a*
+
+    ![new](n.png)
+
+    *Figure 0: new, unlike Figure 1*
+
+    - item
+
+      ![b](b.png)
+
+      > Figure 2: b
+
+    ![Figure 3: alt](c.png)
+
+    Not: `Figure 2`, Figure 2 of RFC 1234, Figure 2.1, Subfigure 2.
+
+    ```text
+    Figure 2
+    ```
+
+    <!-- Figure 2 -->
+  MARKDOWN
+
+  def test_renumber_figures
+    after, changes, skipped = renumber(RENUMBER_BEFORE)
+    expected = {
+      'Figure 2, Figure 0 and figure' => 'Figure 3, Figure 2 and figure',
+      "\n3."                          => "\n4.",
+      'Figure 0: new'                 => 'Figure 2: new',
+      '> Figure 2: b'                 => '> Figure 3: b',
+      '![Figure 3: alt]'              => '![Figure 4: alt]'
+    }.reduce(RENUMBER_BEFORE) { |text, (from, to)| text.sub(from, to) }
+    assert_equal(expected, after)
+    assert_equal(
+      ['1: Figure 2 -> Figure 3', '1: Figure 0 -> Figure 2', '2: Figure 3 -> Figure 4', '10: Figure 0 -> Figure 2', '16: Figure 2 -> Figure 3', '18: Figure 3 -> Figure 4'],
+      changes
+    )
+    assert_empty(skipped)
+    # numbered: nothing to change, and the filter agrees
+    assert_equal([after, [], []], renumber(after))
+    assert_empty(pandoc_warnings(after, 'html', 'native').last)
+  end
+
+  # Mentions of a number of several figures, or of none: not renumbered
+  def test_renumber_figures_ambiguous
+    markdown = "![a](a.png)\n\n*Figure 1: a*\n\n![b](b.png)\n\n*Figure 1: b*\n\nSee Figure 1 and Figure 9.\n"
+    after, changes, skipped = renumber(markdown)
+    assert_equal(markdown.sub('Figure 1: b', 'Figure 2: b'), after)
+    assert_equal(['7: Figure 1 -> Figure 2'], changes)
+    assert_equal(['9: Figure 1 not renumbered: several figures have this number', '9: Figure 9 not renumbered: no figure has this number'], skipped)
+  end
+
+  # Same captions as common/figure_caption.lua, also HTML images and alt text
+  def test_renumber_figures_caption_forms
+    forms = MANUAL_CAPTIONS.merge(
+      'html image' => "<img src=\"x.png\" alt=\"Alt text\">\n\n*Figure 1: Manual caption*\n",
+      'alt text'   => "![Figure 1: Manual caption](x.png)\n"
+    )
+    forms.each do |form, markdown|
+      after, changes, = renumber(markdown.sub('Figure 1', 'Figure 5'))
+      assert_equal(markdown, after, form)
+      assert_equal(1, changes.length, form)
+    end
+  end
+
+  # Inline code on two lines; a stray backtick does not start inline code up to the next paragraphs
+  def test_renumber_figures_inline_code
+    markdown = "A stray ` backtick.\n\n![x](x.png)\n\n*Figure 2: x*\n\nSee Figure 2, not `Figure\n2`.\n"
+    after, changes, = renumber(markdown)
+    assert_equal("A stray ` backtick.\n\n![x](x.png)\n\n*Figure 1: x*\n\nSee Figure 1, not `Figure\n2`.\n", after)
+    assert_equal(2, changes.length)
+  end
+
+  # A caption in an indented code block: pandoc and the text disagree, the file is not changed
+  def test_renumber_figures_not_found
+    markdown = "Text.\n\n    ![x](x.png)\n\n    *Figure 2: in code*\n"
+    with_markdown(markdown) do |md|
+      error = assert_raises(RuntimeError) { Gfm2Pdf.renumber_figures(md) }
+      assert_includes(error.message, 'figures of pandoc () not found in the text (2), renumber them by hand')
+      assert_equal(markdown, md.read)
+    end
+  end
+
+  def test_cli_renumber_figures
+    with_markdown("![x](x.png)\n\n*Figure 2: x*\n\nSee Figure 2.\n") do |md|
+      _out, err, status = Open3.capture3({'GFM2PDF_LOG_LEVEL' => 'info'}, 'ruby', (ROOT / 'lib/pandoc.rb').to_s, 'renumber-figures', md.to_s)
+      assert(status.success?, err)
+      assert_includes(err, "#{md}:3: Figure 2 -> Figure 1")
+      assert_equal("![x](x.png)\n\n*Figure 1: x*\n\nSee Figure 1.\n", md.read)
+    end
+  end
+
   def test_version
     assert_match(/\A\d+\.\d+\.\d+(\.pre)?\z/, Gfm2Pdf::VERSION)
     assert_equal(Gfm2Pdf::VERSION, (ROOT / 'VERSION').read.strip)

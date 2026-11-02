@@ -10,6 +10,8 @@ Released: [Place date of release here]
   duplicate, wrong order), e.g. after a figure is added.
 - Figures: a mention `Figure <number>` in the text is a link to the figure, with a warning if no figure has this
   number.
+- Command `renumber-figures <input.md>`: renumbers the figure captions 1, 2, 3... in the Markdown file, and the
+  mentions `Figure <number>` with them. To add a figure, give it a number not used yet, e.g. `Figure 0`.
 
 ### Changed
 

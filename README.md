@@ -62,12 +62,16 @@ Without `make`, call the script directly:
 ruby $GFM2PDF_HOME/lib/pandoc.rb pdf README.md README.pdf
 ruby $GFM2PDF_HOME/lib/pandoc.rb html README.md README.html
 ruby $GFM2PDF_HOME/lib/pandoc.rb check-anchors README.md
+ruby $GFM2PDF_HOME/lib/pandoc.rb renumber-figures README.md
 ruby $GFM2PDF_HOME/lib/pandoc.rb deps
 ruby $GFM2PDF_HOME/lib/pandoc.rb version
 ```
 
 `check-anchors` checks that internal links (`[text](#anchor)`) match a heading, both on GitHub and in the PDF: GitHub
 and `pandoc` generate heading identifiers differently (e.g. `.` is kept by `pandoc`).
+`renumber-figures` rewrites the Markdown file: figure captions 1, 2, 3... in the order of the document, and the
+mentions `Figure <number>` follow their figure (not in code, nor `Figure 2 of RFC 1234`). It lists the changes, and
+the mentions it cannot renumber: number of several figures, or of none. Review them with `git diff`.
 `deps` lists the files of the toolchain and of the theme: `pandoc.mak` makes the generated documents depend on them.
 
 Messages go to stderr, set `GFM2PDF_LOG_LEVEL` (`debug`, `info`, `warn`, `error`) to change the level (default:
@@ -206,16 +210,21 @@ Example of a theme, with images at the top and bottom of the cover and last page
   `Figure <number>`, in italic or not, or in a quote. It replaces the alt text as caption, and is not repeated in the
   body. The PDF engine does not number figures: the number is in the manual caption, as on GitHub.
   A warning tells when the numbers are not 1, 2, 3... in the order of the document (gap, duplicate, wrong order), e.g.
-  after a figure is added: `Figure 3 (after Figure 1): expected Figure 2`. Only plain numbers are checked, not
+  after a figure is added: `Figure 3 (after Figure 1): expected Figure 2, fix: lib/pandoc.rb renumber-figures`.
+  Only plain numbers are checked, not
   `Figure 1.2` or `Figure 3a`.
-- A mention `Figure <number>` in the text, e.g. `see Figure 3.`, is a link to the figure, with a warning if no figure
-  has this number. Not linked: headings, captions, text of links, `Figure 2 of RFC 1234` (figure of another document).
 
   ```markdown
   ![Diagram: TCP control channel and UDP data channel between client and server](images/fasp.png)
 
   *Figure 3: FASP protocol structure and ports*
   ```
+
+- A mention `Figure <number>` in the text, e.g. `see Figure 3.`, is a link to the figure, with a warning if no figure
+  has this number. Not linked: headings, captions, text of links, `Figure 2 of RFC 1234` (figure of another document).
+- To add a figure, give it a number not used yet, e.g. `*Figure 0: New diagram*`, mention it as `Figure 0`, then
+  run `renumber-figures` (see [Usage](#usage)): the captions become 1, 2, 3... in the order of the document, and each
+  mention follows its figure. With a number already used, mentions of it would be ambiguous: they are not renumbered.
 
 - Inline code breaks at the end of a line only after separators (`/`, `=`, `,`, `.`, `_`, ...), not after hyphens:
   `--transfer=direct` never breaks after `--`.

@@ -98,17 +98,6 @@ class FiltersTest < Minitest::Test
     end
   end
 
-  # Forms of a manual caption after an image, as shown by GitHub
-  MANUAL_CAPTIONS = {
-    'italic'         => "![Alt text](x.png)\n\n*Figure 1: Manual caption*\n",
-    'plain'          => "![Alt text](x.png)\n\nFigure 1: Manual caption\n",
-    'quote'          => "![Alt text](x.png)\n\n> Figure 1: Manual caption\n",
-    'quote, no line' => "![Alt text](x.png)\n> Figure 1: Manual caption\n",
-    'next line'      => "![Alt text](x.png)\n*Figure 1: Manual caption*\n",
-    'no alt text'    => "![](x.png)\n\n*Figure 1: Manual caption*\n",
-    'in a list'      => "- item\n\n  ![Alt text](x.png)\n\n  *Figure 1: Manual caption*\n"
-  }.freeze
-
   # The manual caption replaces the alt text as caption, and is not in the body
   def test_figure_manual_caption
     MANUAL_CAPTIONS.each do |form, markdown|
@@ -168,7 +157,7 @@ class FiltersTest < Minitest::Test
                         ['Figure 2 (first numbered figure): expected Figure 1', 'Figure 1 (after Figure 2): expected Figure 3']],
       'in alt text' => ["![Figure 2: alt](x.png)\n", ['Figure 2 (first numbered figure): expected Figure 1']]
     }.each do |form, (markdown, warnings)|
-      assert_equal(warnings, figure_warnings(markdown), form)
+      assert_equal(warnings.map { |w| "#{w}, fix: lib/pandoc.rb renumber-figures" }, figure_warnings(markdown), form)
     end
   end
 
