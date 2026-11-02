@@ -15,6 +15,8 @@ Hello from the sample, see the [details](#details).
 
 ![Logo](image.svg)
 
+*Figure 1: Logo of the sample*
+
 ## Details
 
 | Field | Type | Description |

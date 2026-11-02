@@ -15,3 +15,4 @@ filters:
   - ${.}/gfm_admonition.lua
   - ${.}/break_replace.lua
   - ${.}/pdf_instead_of_svg.lua
+  - ${.}/figure_caption.lua

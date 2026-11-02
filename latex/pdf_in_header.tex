@@ -19,6 +19,11 @@ fontsize=\small
 }
 % https://ctan.org/pkg/graphicx
 \usepackage{graphicx}
+% Figures: no label "Figure 1.1:", the caption is the manual one with its number, or the alt text,
+% see common/figure_caption.lua
+% https://ctan.org/pkg/caption
+\usepackage{caption}
+\captionsetup[figure]{labelformat=empty}
 % SVG converted with inkscape (default), preserves aspect ratio.
 % No option: pandoc already loads it when the document has SVG images.
 \usepackage{svg}

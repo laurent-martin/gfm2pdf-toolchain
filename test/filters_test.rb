@@ -98,6 +98,46 @@ class FiltersTest < Minitest::Test
     end
   end
 
+  # Forms of a manual caption after an image, as shown by GitHub
+  MANUAL_CAPTIONS = {
+    'italic'         => "![Alt text](x.png)\n\n*Figure 1: Manual caption*\n",
+    'plain'          => "![Alt text](x.png)\n\nFigure 1: Manual caption\n",
+    'quote'          => "![Alt text](x.png)\n\n> Figure 1: Manual caption\n",
+    'quote, no line' => "![Alt text](x.png)\n> Figure 1: Manual caption\n",
+    'next line'      => "![Alt text](x.png)\n*Figure 1: Manual caption*\n",
+    'no alt text'    => "![](x.png)\n\n*Figure 1: Manual caption*\n",
+    'in a list'      => "- item\n\n  ![Alt text](x.png)\n\n  *Figure 1: Manual caption*\n"
+  }.freeze
+
+  # The manual caption replaces the alt text as caption, and is not in the body
+  def test_figure_manual_caption
+    MANUAL_CAPTIONS.each do |form, markdown|
+      latex = pandoc(markdown, 'latex', 'latex')
+      assert_includes(latex, '\caption{Figure 1: Manual caption}', form)
+      assert_equal(1, latex.scan('Manual caption').length, form)
+    end
+  end
+
+  def test_figure_manual_caption_typst_html
+    typst = pandoc(MANUAL_CAPTIONS['italic'], 'typst', 'typst')
+    assert_match(/caption: \[\s*Figure 1: Manual caption\s*\]/, typst)
+    assert_equal(1, typst.scan('Manual caption').length)
+    html = pandoc(MANUAL_CAPTIONS['italic'], 'html', 'html5')
+    assert_includes(html, 'Figure 1: Manual caption</figcaption>')
+    assert_equal(1, html.scan('Manual caption').length)
+  end
+
+  # Without manual caption, the caption is the alt text
+  def test_figure_alt_caption
+    latex = pandoc("![Alt text](x.png)\n\nText.\n", 'latex', 'latex')
+    assert_includes(latex, '\caption{Alt text}')
+    assert_includes(latex, "\nText.\n")
+    # body text about a figure, not a caption
+    latex = pandoc("![Alt text](x.png)\n\nFigure out the setup.\n", 'latex', 'latex')
+    assert_includes(latex, '\caption{Alt text}')
+    assert_includes(latex, "\nFigure out the setup.\n")
+  end
+
   def test_table_auto_typst
     typst = pandoc(WIDE_TABLE, 'typst', 'typst')
     assert_includes(typst, 'columns: 3,')

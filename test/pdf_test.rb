@@ -18,6 +18,8 @@ class PdfTest < Minitest::Test
     '↪',
     'End of document'
   ].freeze
+  # Manual caption of the image: once, without number added by the PDF engine
+  CAPTION = 'Figure 1: Logo of the sample'
 
   # Generate the PDF of the sample with the engine, and check its text
   def check_pdf(engine)
@@ -26,6 +28,8 @@ class PdfTest < Minitest::Test
       Gfm2Pdf.markdown_to_pdf(md: dir / 'sample.md', pdf: pdf, engine: engine)
       text = pdf_text(pdf)
       EXPECTED.each { |expected| assert_includes(text, expected) }
+      assert_equal(1, text.scan(CAPTION).length, text)
+      refute_match(/Figure 1(\.1)?:\s*Figure/, text)
       assert_empty(dir.glob('.tmp.*'), 'temporary files removed')
       yield(dir, pdf) if block_given?
     end

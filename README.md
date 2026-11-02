@@ -200,6 +200,17 @@ Example of a theme, with images at the top and bottom of the cover and last page
   (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`) become colored boxes.
 - The first level 1 heading is the title of the document, level 2 headings are chapters.
 - HTML `<img>` tags are converted to Markdown images.
+- Figures have one caption: the manual caption if any, else the alt text (`common/figure_caption.lua`).
+  GitHub does not show the alt text, so a caption visible on GitHub is a paragraph just after the image, starting with
+  `Figure <number>`, in italic or not, or in a quote. It replaces the alt text as caption, and is not repeated in the
+  body. The PDF engine does not number figures: the number is in the manual caption, as on GitHub.
+
+  ```markdown
+  ![Diagram: TCP control channel and UDP data channel between client and server](images/fasp.png)
+
+  *Figure 3: FASP protocol structure and ports*
+  ```
+
 - Inline code breaks at the end of a line only after separators (`/`, `=`, `,`, `.`, `_`, ...), not after hyphens:
   `--transfer=direct` never breaks after `--`.
 - Short (MultiMarkdown) subscripts are disabled: `~600 ms` or `~/.ssh` stay as typed, `H~2~O` is still a subscript.
@@ -264,7 +275,7 @@ Requirements use the [RubyGems syntax](https://guides.rubygems.org/patterns/#dec
 
 | Folder | Content |
 | --- | --- |
-| `common/` | `pandoc` defaults and Lua filters for all outputs: admonitions, line breaks in tables, PDF instead of SVG |
+| `common/` | `pandoc` defaults and Lua filters for all outputs: admonitions, line breaks in tables, PDF instead of SVG, figure captions |
 | `typst/` | PDF with Typst: template (`report.typ`), admonition boxes, table widths |
 | `latex/` | PDF with LuaLaTeX: LaTeX header and last page, table widths, line breaks in inline code |
 | `html/` | HTML: style of admonition boxes |

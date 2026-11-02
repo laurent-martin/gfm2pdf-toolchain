@@ -8,6 +8,10 @@ Released: [Place date of release here]
 
 ### Changed
 
+- Figures: one caption, the manual caption (paragraph `Figure <number> ...` just after the image, as shown by GitHub)
+  if any, else the alt text: the manual caption is no longer duplicated. PDF engines no longer add a label
+  `Figure 1.1:` to captions.
+
 ### Fixed
 
 - PDF: remote images (`![alt](https://...)`) are downloaded, Typst has no network access.

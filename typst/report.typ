@@ -97,6 +97,9 @@
 
   // Tables: may break across pages, alternate row colors, left aligned cells, no justification
   show figure.where(kind: table): set block(breakable: true)
+  // Figures: no label "Figure 1:", the caption is the manual one with its number, or the alt text,
+  // see common/figure_caption.lua
+  show figure.where(kind: image): set figure(numbering: none)
   set table(inset: 4pt, fill: (_, y) => if y > 0 and calc.even(y) { luma(245) })
   show table: set par(justify: false, first-line-indent: 0pt)
   show table: set align(left)
