@@ -7,8 +7,9 @@ require 'tmpdir'
 require_relative '../lib/pandoc'
 
 Gfm2Pdf.log.level = ENV.fetch('GFM2PDF_LOG_LEVEL', 'warn')
-# Tests give the theme explicitly, not the one of the environment
+# Tests give the theme and the mode explicitly, not the ones of the environment
 ENV.delete('GFM2PDF_THEME')
+ENV.delete('GFM2PDF_MODE')
 
 module TestHelper
   ROOT = Gfm2Pdf::ROOT

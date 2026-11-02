@@ -77,6 +77,24 @@ the mentions it cannot renumber: number of several figures, or of none. Review t
 Messages go to stderr, set `GFM2PDF_LOG_LEVEL` (`debug`, `info`, `warn`, `error`) to change the level (default:
 `info`).
 
+### Modes
+
+The env var or `make` variable `GFM2PDF_MODE` selects what `pdf`, `html` and `make` do:
+
+| Mode | Generation | Use |
+| --- | --- | --- |
+| `build` (default) | Generate the documents, warnings are displayed. | |
+| `check` | A warning is an error: of `pandoc`, of the filters (e.g. figure numbers), or of the PDF engine (e.g. missing character, unknown font). Internal links must match a heading on GitHub too (`check-anchors`). A document that fails has no output, not even an older one. | CI |
+| `fix` | Fix the Markdown files where possible (`renumber-figures`), then generate the documents. What cannot be fixed stays a warning. Review the changes with `git diff`. | locally, not in CI: the fixes would not be committed |
+
+```shell
+make GFM2PDF_MODE=check
+GFM2PDF_MODE=fix make
+```
+
+With `make`, modes `check` and `fix` also generate the documents that are up to date. Set the mode in the
+environment, on the command line, or before including `pandoc.mak`, not per target.
+
 Variables of `pandoc.mak` start with `GFM2PDF_`, so that they do not change the ones of the including Makefile.
 
 ## PDF engines

@@ -25,7 +25,8 @@ class PdfTest < Minitest::Test
   def check_pdf(engine)
     with_fixtures do |dir|
       pdf = dir / 'out/sample.pdf'
-      Gfm2Pdf.markdown_to_pdf(md: dir / 'sample.md', pdf: pdf, engine: engine)
+      # mode check: the sample has no warnings
+      Gfm2Pdf.markdown_to_pdf(md: dir / 'sample.md', pdf: pdf, engine: engine, mode: 'check')
       text = pdf_text(pdf)
       EXPECTED.each { |expected| assert_includes(text, expected) }
       assert_equal(1, text.scan(CAPTION).length, text)
@@ -38,6 +39,24 @@ class PdfTest < Minitest::Test
   def test_typst
     require_command('typst')
     check_pdf('typst')
+  end
+
+  # Mode check: a warning of Typst (it has no option for it) is an error, and there is no PDF
+  def test_typst_check_warning
+    require_command('typst')
+    with_fixtures do |dir|
+      md = dir / 'font.md'
+      md.write("# Font\n\n## Unknown\n\n```{=typst}\n#text(font: \"NoSuchFont\")[x]\n```\n")
+      pdf = dir / 'out/font.pdf'
+      capture_subprocess_io { Gfm2Pdf.markdown_to_pdf(md: md, pdf: pdf, engine: 'typst', mode: 'build') }
+      assert_path_exists(pdf)
+      _out, err = capture_subprocess_io do
+        error = assert_raises(RuntimeError) { Gfm2Pdf.markdown_to_pdf(md: md, pdf: pdf, engine: 'typst', mode: 'check') }
+        assert_equal('typst: failing because there were warnings', error.message)
+      end
+      assert_includes(err, 'unknown font family: nosuchfont')
+      refute_path_exists(pdf)
+    end
   end
 
   def test_typst_is_reproducible
@@ -172,15 +191,19 @@ class PdfTest < Minitest::Test
       out, status = make.call
       assert(status.success?, out)
       assert_includes(out, 'Nothing to be done')
+      # modes check and fix: also the documents up to date
+      out, status = make.call('-n', 'GFM2PDF_MODE=check')
+      assert(status.success?, out)
+      assert_match(%r{^GFM2PDF_ENGINE=latex GFM2PDF_THEME= GFM2PDF_MODE=check ruby \S+/lib/pandoc.rb pdf sample.md sample.pdf$}, out)
       # engine per target
       FileUtils.cp(dir / 'sample.md', dir / 'other.md')
       out, status = make.call('-n', 'other.pdf')
       assert(status.success?, out)
-      assert_match(%r{^GFM2PDF_ENGINE=typst GFM2PDF_THEME= ruby \S+/lib/pandoc.rb pdf other.md other.pdf$}, out)
+      assert_match(%r{^GFM2PDF_ENGINE=typst GFM2PDF_THEME= GFM2PDF_MODE=build ruby \S+/lib/pandoc.rb pdf other.md other.pdf$}, out)
       # theme: given to pandoc.rb, its files are dependencies
       out, status = make.call('-n', 'other.pdf', 'GFM2PDF_THEME=theme')
       assert(status.success?, out)
-      assert_match(/^GFM2PDF_ENGINE=typst GFM2PDF_THEME=theme ruby /, out)
+      assert_match(/^GFM2PDF_ENGINE=typst GFM2PDF_THEME=theme GFM2PDF_MODE=build ruby /, out)
       out, status = make.call('show-deps', 'GFM2PDF_THEME=theme')
       assert(status.success?, out)
       assert_match(%r{/theme/cover\.tex\b}, out)

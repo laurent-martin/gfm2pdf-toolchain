@@ -161,6 +161,82 @@ class PandocRbTest < Minitest::Test
     assert_includes(error.message, 'latex, typst')
   end
 
+  def test_default_mode
+    saved = ENV.delete('GFM2PDF_MODE')
+    assert_equal('build', Gfm2Pdf.default_mode)
+    ENV['GFM2PDF_MODE'] = 'check'
+    assert_equal('check', Gfm2Pdf.default_mode)
+  ensure
+    ENV['GFM2PDF_MODE'] = saved
+  end
+
+  def test_unknown_mode
+    with_markdown("Text.\n") do |md|
+      error = assert_raises(ArgumentError) { Gfm2Pdf.markdown_to_html(md: md, html: md.sub_ext('.html'), mode: 'chek') }
+      assert_includes(error.message, 'Unknown mode: chek, expected one of: build, check, fix')
+    end
+  end
+
+  # Generate HTML from the Markdown in a mode, quietly, with image `x.png` next to it, and an older HTML file
+  # @yieldparam md    [Pathname] Markdown file, after the generation
+  # @yieldparam html  [Pathname] HTML file
+  # @yieldparam error [StandardError, nil] Error of the generation
+  def html_in_mode(markdown, mode)
+    level = Gfm2Pdf.log.level
+    Gfm2Pdf.log.level = :fatal
+    with_markdown(markdown) do |md|
+      FileUtils.cp(FIXTURES / 'theme/cover.png', md.dirname / 'x.png')
+      html = md.sub_ext('.html')
+      html.write('older')
+      error = nil
+      # warnings of pandoc
+      capture_subprocess_io do
+        Gfm2Pdf.markdown_to_html(md: md, html: html, mode: mode)
+      rescue StandardError => e
+        error = e
+      end
+      yield(md, html, error)
+    end
+  ensure
+    Gfm2Pdf.log.level = level
+  end
+
+  GAP = "![x](x.png)\n\n*Figure 2: x*\n"
+
+  def test_mode_build
+    html_in_mode(GAP, 'build') do |_md, html, error|
+      assert_nil(error)
+      assert_includes(html.read, 'Figure 2: x</figcaption>')
+    end
+  end
+
+  def test_mode_check
+    html_in_mode("![x](x.png)\n\n*Figure 1: x*\n\nSee Figure 1.\n", 'check') do |_md, html, error|
+      assert_nil(error)
+      assert_includes(html.read, '<a href="#fig-1">')
+    end
+    # a warning, or an internal link without heading: an error, and no output, not even the older one
+    [GAP, "See [details](#details).\n"].each do |markdown|
+      html_in_mode(markdown, 'check') do |_md, html, error|
+        assert_kind_of(RuntimeError, error, markdown)
+        refute_path_exists(html, markdown)
+      end
+    end
+  end
+
+  def test_mode_fix
+    html_in_mode("#{GAP}\nSee Figure 2.\n", 'fix') do |md, html, error|
+      assert_nil(error)
+      assert_equal("![x](x.png)\n\n*Figure 1: x*\n\nSee Figure 1.\n", md.read)
+      assert_includes(html.read, 'Figure 1: x</figcaption>')
+    end
+    # cannot be fixed (caption in code): generated anyway
+    html_in_mode("Text.\n\n    ![x](x.png)\n\n    *Figure 2: in code*\n", 'fix') do |_md, html, error|
+      assert_nil(error)
+      assert_includes(html.read, 'Figure 2: in code')
+    end
+  end
+
   def test_check_anchors
     Gfm2Pdf.check_markdown_anchors(FIXTURES / 'sample.md')
     level = Gfm2Pdf.log.level

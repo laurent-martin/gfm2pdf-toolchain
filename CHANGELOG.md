@@ -12,6 +12,9 @@ Released: [Place date of release here]
   number.
 - Command `renumber-figures <input.md>`: renumbers the figure captions 1, 2, 3... in the Markdown file, and the
   mentions `Figure <number>` with them. To add a figure, give it a number not used yet, e.g. `Figure 0`.
+- Env var or `make` variable `GFM2PDF_MODE`: `build` (default), `check` (a warning is an error, internal links are
+  checked, no output on failure: for CI) or `fix` (renumber the figures of the Markdown files, then build). With
+  `make`, `check` and `fix` also generate the documents that are up to date.
 
 ### Changed
 

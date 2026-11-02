@@ -23,6 +23,9 @@ module Gfm2Pdf
   VERSION = ROOT.join('VERSION').read.strip.freeze
   # PDF engines, the first one is the default
   PDF_ENGINES = %w[latex typst].freeze
+  # Modes of generation, the first one is the default: build, check (a warning is an error), fix (fix the Markdown file
+  # where possible, then build), see with_mode
+  MODES = %w[build check fix].freeze
   # Folders with pandoc defaults, filters and templates
   DATA_FOLDERS = %w[common html latex typst].freeze
   # Sections of the options of a document, in the order they are applied: pandoc defaults for all outputs, for an
@@ -69,6 +72,45 @@ module Gfm2Pdf
   # @return [String]
   def default_engine
     ENV.fetch('GFM2PDF_ENGINE', PDF_ENGINES.first)
+  end
+
+  # Mode of generation from env var `GFM2PDF_MODE`, else the default one
+  # @return [String]
+  def default_mode
+    ENV.fetch('GFM2PDF_MODE', MODES.first)
+  end
+
+  # Generate a document in a mode:
+  # - `build`: generate it, warnings are displayed
+  # - `check`: a warning is an error (pandoc, filters, PDF engine), and internal links must match a heading on GitHub
+  #   too (check_markdown_anchors). A document that fails has no output, not even an older one.
+  # - `fix`: renumber the figures of the Markdown file (renumber_figures), then generate it: what cannot be fixed stays
+  #   a warning
+  # @param md     [Pathname] Markdown file
+  # @param output [Pathname] Generated document
+  # @param mode   [String]   One of MODES
+  # @yieldparam args [Array<String>] Pandoc arguments of the mode
+  # @raise [ArgumentError] if the mode is unknown
+  def with_mode(md, output, mode)
+    raise ArgumentError, "Unknown mode: #{mode}, expected one of: #{MODES.join(', ')}" unless MODES.include?(mode)
+    case mode
+    when 'check'
+      begin
+        check_markdown_anchors(md)
+        yield(['--fail-if-warnings'])
+      rescue StandardError
+        output.delete if output.exist?
+        raise
+      end
+    when 'fix'
+      begin
+        renumber_figures(md)
+      rescue RuntimeError => e
+        log.warn(e.message)
+      end
+      yield([])
+    else yield([])
+    end
   end
 
   # Theme folder from env var `GFM2PDF_THEME`
@@ -298,20 +340,24 @@ module Gfm2Pdf
   # @param pdf    [Pathname] Path to output PDF file
   # @param engine [String]   PDF engine: `latex` or `typst`
   # @param theme  [String, Pathname, nil] Theme folder
-  def markdown_to_pdf(md:, pdf:, engine: default_engine, theme: default_theme)
+  # @param mode   [String]   Mode of generation, see with_mode
+  def markdown_to_pdf(md:, pdf:, engine: default_engine, theme: default_theme, mode: default_mode)
     raise ArgumentError, "Unknown PDF engine: #{engine}, expected one of: #{PDF_ENGINES.join(', ')}" unless PDF_ENGINES.include?(engine)
     theme = theme_folder(theme)
     md = Pathname.new(md).expand_path
     pdf = Pathname.new(pdf).expand_path
-    log.info { "Generating: #{pdf} with #{engine}#{", theme: #{theme}" if theme}" }
-    pdf.dirname.mkpath
-    time = change_time(md)
-    with_source(md, 'pdf', engine, theme: theme) do |source, defaults, tmp|
-      args = ["--variable=date:#{time.strftime('%Y/%m/%d')}", *defaults.map { |f| "--defaults=#{f}" }]
-      if engine.eql?('latex')
-        pdf_with_latex(source, pdf, args, tmp, theme)
-      else
-        pdf_with_typst(source, pdf, args, time, md, theme)
+    with_mode(md, pdf, mode) do |mode_args|
+      log.info { "Generating: #{pdf} with #{engine}#{", theme: #{theme}" if theme}, mode: #{mode}" }
+      pdf.dirname.mkpath
+      # after the fix of the Markdown file, if any
+      time = change_time(md)
+      with_source(md, 'pdf', engine, theme: theme) do |source, defaults, tmp|
+        args = [*mode_args, "--variable=date:#{time.strftime('%Y/%m/%d')}", *defaults.map { |f| "--defaults=#{f}" }]
+        if engine.eql?('latex')
+          pdf_with_latex(source, pdf, args, tmp, theme)
+        else
+          pdf_with_typst(source, pdf, args, time, md, theme)
+        end
       end
     end
   end
@@ -349,7 +395,13 @@ module Gfm2Pdf
     # Inputs of the template, the cover of the theme is imported by it
     inputs = {'emoji-font' => emoji_font, 'cover' => theme_file(theme, 'cover.typ')}.compact
     # Root `/`: the template, the theme and the images are in different folders
-    run('typst', 'compile', '--root', '/', '--creation-timestamp', time.to_i, *inputs.flat_map { |name, value| ['--input', "#{name}=#{value}"] }, typ, pdf)
+    command = ['typst', 'compile', '--root', '/', '--creation-timestamp', time.to_i, *inputs.flat_map { |name, value| ['--input', "#{name}=#{value}"] }, typ, pdf]
+    return run(*command) unless args.include?('--fail-if-warnings')
+    # Mode check: as for pandoc, a warning is an error, Typst has no option for it
+    log.info { "Executing: #{command.join(' ')}" }
+    _out, err, status = Open3.capture3(*command.map(&:to_s))
+    $stderr.write(err)
+    raise "typst: #{status.success? ? 'failing because there were warnings' : 'failed'}" unless status.success? && !err.match?(/^warning:/)
   ensure
     typ.delete if typ&.exist?
   end
@@ -358,12 +410,16 @@ module Gfm2Pdf
   # @param md   [Pathname] Path to Markdown file
   # @param html [Pathname] Path to output HTML file
   # @param theme [String, Pathname, nil] Theme folder
-  def markdown_to_html(md:, html:, theme: default_theme)
+  # @param mode  [String]   Mode of generation, see with_mode
+  def markdown_to_html(md:, html:, theme: default_theme, mode: default_mode)
     theme = theme_folder(theme)
+    md = Pathname.new(md).expand_path
     html = Pathname.new(html).expand_path
-    log.info { "Generating: #{html}" }
-    with_source(md, 'html', theme: theme) do |source, defaults, _tmp|
-      run('pandoc', *defaults.map { |f| "--defaults=#{f}" }, "--output=#{html}", source)
+    with_mode(md, html, mode) do |mode_args|
+      log.info { "Generating: #{html}, mode: #{mode}" }
+      with_source(md, 'html', theme: theme) do |source, defaults, _tmp|
+        run('pandoc', *mode_args, *defaults.map { |f| "--defaults=#{f}" }, "--output=#{html}", source)
+      end
     end
   end
 
@@ -556,6 +612,8 @@ if __FILE__ == $PROGRAM_NAME
       version [<requirement>]        display the version, check that it meets the requirement, e.g. '~> 1.0'
 
     Env var GFM2PDF_THEME: theme folder (cover, fonts, ...) for deps, pdf and html, see README.md
+    Env var GFM2PDF_MODE for pdf and html: build (default), check (a warning is an error, no output) or fix (renumber
+    the figures of the Markdown file, then build)
   TEXT
   command, *args = ARGV
   begin
