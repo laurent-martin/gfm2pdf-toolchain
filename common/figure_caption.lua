@@ -12,6 +12,8 @@
 -- This paragraph becomes the caption of the figure, instead of the alt text, and is removed from the body.
 -- Figures are not numbered by the output (latex/pdf_in_header.tex, typst/report.typ): the manual caption has the
 -- number, as on GitHub.
+-- The numbers of the captions, manual or alt text, must be 1, 2, 3... in the order of the document: a warning tells a
+-- gap, a duplicate or a wrong order, e.g. after a figure is added. Only plain numbers: not `Figure 1.2` or `Figure 3a`.
 
 local CAPTION_START = "^Figure%s+%d"
 
@@ -79,4 +81,31 @@ function Blocks(blocks)
         i = i + 1
     end
     return result
+end
+
+-- @param caption pandoc.Caption caption of a figure
+-- @return integer|nil the number, when the caption starts with `Figure <plain number>`
+local function caption_number(caption)
+    local number, after = pandoc.utils.stringify(caption.long):match("^Figure%s+(%d+)(.?.?)")
+    -- not plain: `Figure 1.2`, `Figure 3a`
+    if number == nil or after:match("^%w") or after:match("^%.%w") then return nil end
+    return tonumber(number)
+end
+
+-- Runs after Blocks: checks the final captions, in the order of the document
+function Pandoc(doc)
+    local previous = 0
+    doc:walk({
+        Figure = function(fig)
+            local number = caption_number(fig.caption)
+            if number == nil then return nil end
+            if number ~= previous + 1 then
+                local place = previous == 0 and "first numbered figure" or ("after Figure " .. previous)
+                pandoc.log.warn(("Figure %d (%s): expected Figure %d"):format(number, place, previous + 1))
+            end
+            -- continue from the number found: one mistake, one warning
+            previous = number
+        end,
+    })
+    return nil
 end

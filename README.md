@@ -205,6 +205,9 @@ Example of a theme, with images at the top and bottom of the cover and last page
   GitHub does not show the alt text, so a caption visible on GitHub is a paragraph just after the image, starting with
   `Figure <number>`, in italic or not, or in a quote. It replaces the alt text as caption, and is not repeated in the
   body. The PDF engine does not number figures: the number is in the manual caption, as on GitHub.
+  A warning tells when the numbers are not 1, 2, 3... in the order of the document (gap, duplicate, wrong order), e.g.
+  after a figure is added: `Figure 3 (after Figure 1): expected Figure 2`. Only plain numbers are checked, not
+  `Figure 1.2` or `Figure 3a`.
 
   ```markdown
   ![Diagram: TCP control channel and UDP data channel between client and server](images/fasp.png)

@@ -138,6 +138,40 @@ class FiltersTest < Minitest::Test
     assert_includes(latex, "\nFigure out the setup.\n")
   end
 
+  # Markdown of figures with these captions, the ones in an Array in a list
+  def figures(*captions)
+    captions.map do |caption|
+      next "![x](x.png)\n\n*#{caption}*\n" if caption.is_a?(String)
+
+      "- item\n\n#{caption.map { |c| "  ![x](x.png)\n\n  *#{c}*\n" }.join("\n")}"
+    end.join("\n")
+  end
+
+  # Warnings of the check of the figure numbers
+  def figure_warnings(markdown)
+    pandoc_warnings(markdown, 'html', 'native').last.lines.grep(/expected Figure/).map { |line| line[/Figure \d+ \(.*/] }
+  end
+
+  def test_figure_numbers
+    # in the order of the document, also in a list; alt text, other text and other numberings are not checked
+    assert_empty(figure_warnings(figures('Figure 1: a', ['Figure 2: b'], 'Figure 3: c')))
+    assert_empty(figure_warnings("#{figures('Figure 1: a')}\n![Alt text](x.png)\n\n#{figures('Figure 2: b')}"))
+    assert_empty(figure_warnings(figures('Figure 1.1: a', 'Figure 3a: b', 'Figure 1. c', 'Figure 2 d')))
+  end
+
+  def test_figure_numbers_wrong
+    {
+      'gap'         => [figures('Figure 1: a', 'Figure 3: c'), ['Figure 3 (after Figure 1): expected Figure 2']],
+      'first'       => [figures('Figure 2: a'), ['Figure 2 (first numbered figure): expected Figure 1']],
+      'duplicate'   => [figures('Figure 1: a', 'Figure 1: b', 'Figure 2: c'), ['Figure 1 (after Figure 1): expected Figure 2']],
+      'list order'  => [figures(['Figure 2: b'], 'Figure 1: a'),
+                        ['Figure 2 (first numbered figure): expected Figure 1', 'Figure 1 (after Figure 2): expected Figure 3']],
+      'in alt text' => ["![Figure 2: alt](x.png)\n", ['Figure 2 (first numbered figure): expected Figure 1']]
+    }.each do |form, (markdown, warnings)|
+      assert_equal(warnings, figure_warnings(markdown), form)
+    end
+  end
+
   def test_table_auto_typst
     typst = pandoc(WIDE_TABLE, 'typst', 'typst')
     assert_includes(typst, 'columns: 3,')

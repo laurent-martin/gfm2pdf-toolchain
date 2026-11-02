@@ -20,12 +20,18 @@ module TestHelper
   # @param to       [String] Pandoc output format
   # @return [String] Pandoc output
   def pandoc(markdown, output, to)
+    pandoc_warnings(markdown, output, to).first
+  end
+
+  # Same as `pandoc`, with the warnings
+  # @return [Array(String, String)] Pandoc output, and its warnings (standard error)
+  def pandoc_warnings(markdown, output, to)
     out, err, status = Open3.capture3(
       'pandoc', "--defaults=#{ROOT / 'common/defaults.yaml'}", "--defaults=#{ROOT / output / 'defaults.yaml'}", "--to=#{to}",
       stdin_data: markdown
     )
     assert(status.success?, err)
-    out
+    [out, err]
   end
 
   # Skip the test if the command is not in the PATH

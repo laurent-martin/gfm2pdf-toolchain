@@ -6,6 +6,9 @@ Released: [Place date of release here]
 
 ### New
 
+- Figures: a warning when the numbers of the captions are not 1, 2, 3... in the order of the document (gap,
+  duplicate, wrong order), e.g. after a figure is added.
+
 ### Changed
 
 - Figures: one caption, the manual caption (paragraph `Figure <number> ...` just after the image, as shown by GitHub)
