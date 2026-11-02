@@ -8,7 +8,7 @@ common:
 
 ## Introduction
 
-Hello from the sample, see the [details](#details).
+Hello from the sample, see the [details](#details) and the logo in Figure 1.
 
 > [!NOTE]
 > Use option `--transfer=direct` to execute `ascp` locally.

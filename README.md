@@ -208,6 +208,8 @@ Example of a theme, with images at the top and bottom of the cover and last page
   A warning tells when the numbers are not 1, 2, 3... in the order of the document (gap, duplicate, wrong order), e.g.
   after a figure is added: `Figure 3 (after Figure 1): expected Figure 2`. Only plain numbers are checked, not
   `Figure 1.2` or `Figure 3a`.
+- A mention `Figure <number>` in the text, e.g. `see Figure 3.`, is a link to the figure, with a warning if no figure
+  has this number. Not linked: headings, captions, text of links, `Figure 2 of RFC 1234` (figure of another document).
 
   ```markdown
   ![Diagram: TCP control channel and UDP data channel between client and server](images/fasp.png)

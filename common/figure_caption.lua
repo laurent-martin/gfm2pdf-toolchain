@@ -14,6 +14,9 @@
 -- number, as on GitHub.
 -- The numbers of the captions, manual or alt text, must be 1, 2, 3... in the order of the document: a warning tells a
 -- gap, a duplicate or a wrong order, e.g. after a figure is added. Only plain numbers: not `Figure 1.2` or `Figure 3a`.
+-- A numbered figure gets the identifier `fig-<number>` (unless it has one; `fig-<number>-1` if taken), and a mention
+-- `Figure <number>` in the text links to it, e.g. `see Figure 3.`, with a warning if no figure has this number.
+-- Not linked: headings, captions, text of links and images, `Figure 2 of RFC 1234` (figure of another document).
 
 local CAPTION_START = "^Figure%s+%d"
 
@@ -83,19 +86,78 @@ function Blocks(blocks)
     return result
 end
 
+-- @param text string text starting with a number, e.g. `3: caption`, `3,` or `1.2`
+-- @return integer|nil the number, when plain: not `1.2`, `3a`
+-- @return string the text after the number
+local function plain_number(text)
+    local number, after = text:match("^(%d+)(.*)$")
+    if number == nil or after:match("^%w") or after:match("^%.%w") then return nil, after end
+    return tonumber(number), after
+end
+
 -- @param caption pandoc.Caption caption of a figure
 -- @return integer|nil the number, when the caption starts with `Figure <plain number>`
 local function caption_number(caption)
-    local number, after = pandoc.utils.stringify(caption.long):match("^Figure%s+(%d+)(.?.?)")
-    -- not plain: `Figure 1.2`, `Figure 3a`
-    if number == nil or after:match("^%w") or after:match("^%.%w") then return nil end
-    return tonumber(number)
+    local text = pandoc.utils.stringify(caption.long):match("^Figure%s+(.*)$")
+    if text == nil then return nil end
+    return (plain_number(text))
 end
 
--- Runs after Blocks: checks the final captions, in the order of the document
+local SEPARATORS = { Space = true, SoftBreak = true }
+
+-- @param ids table identifier of the figure of each number
+-- @return function Inlines filter: a mention `Figure <number>` becomes a link to the figure
+local function link_mentions(ids)
+    local warned = {}
+    return function(inlines)
+        local result = pandoc.Inlines({})
+        local i = 1
+        while i <= #inlines do
+            local word, separator, digits = inlines[i], inlines[i + 1], inlines[i + 2]
+            -- `Figure`, after a punctuation if any: `(Figure`, not `Subfigure`
+            local before, figure_word, number, after
+            if word.t == "Str" then before, figure_word = word.text:match("^(.-)([Ff]igure)$") end
+            if figure_word and not before:match("%w$") and separator and SEPARATORS[separator.t]
+                and digits and digits.t == "Str" then
+                number, after = plain_number(digits.text)
+            end
+            -- `Figure 2 of RFC 1234`: figure of another document
+            local next_word = inlines[i + 4]
+            if number and after == "" and inlines[i + 3] and inlines[i + 3].t == "Space"
+                and next_word and next_word.t == "Str" and next_word.text == "of" then
+                number = nil
+            end
+            if number and ids[number] == nil and not warned[number] then
+                warned[number] = true
+                pandoc.log.warn(("Figure %d mentioned in the text: no figure has this number"):format(number))
+            end
+            if number and ids[number] then
+                if before ~= "" then result:insert(pandoc.Str(before)) end
+                local text = digits.text:sub(1, #digits.text - #after)
+                result:insert(pandoc.Link({ pandoc.Str(figure_word), pandoc.Space(), pandoc.Str(text) }, "#" .. ids[number]))
+                if after ~= "" then result:insert(pandoc.Str(after)) end
+                i = i + 3
+            else
+                result:insert(word)
+                i = i + 1
+            end
+        end
+        return result
+    end
+end
+
+-- Stops the traversal in an element: its text is not linked
+local function skip(element) return element, false end
+
+-- Runs after Blocks: checks the final captions, in the order of the document, and links the mentions of figures
 function Pandoc(doc)
+    -- identifiers of headings (e.g. heading `Fig 1` is `fig-1`), divs and spans: not given to a figure
+    local used = {}
+    local function use(element) used[element.identifier] = true end
+    doc:walk({ Header = use, Div = use, Span = use })
     local previous = 0
-    doc:walk({
+    local ids = {}
+    doc = doc:walk({
         Figure = function(fig)
             local number = caption_number(fig.caption)
             if number == nil then return nil end
@@ -105,7 +167,28 @@ function Pandoc(doc)
             end
             -- continue from the number found: one mistake, one warning
             previous = number
+            -- a duplicate number: mentions link to the first figure
+            if ids[number] then return nil end
+            if fig.identifier == "" then
+                -- taken, e.g. by heading `Fig 1`: `fig-1-1`, as pandoc does for headings
+                local id, suffix = "fig-" .. number, 0
+                while used[id] do
+                    suffix = suffix + 1
+                    id = ("fig-%d-%d"):format(number, suffix)
+                end
+                fig.identifier = id
+            end
+            used[fig.identifier] = true
+            ids[number] = fig.identifier
+            return fig
         end,
     })
-    return nil
+    return doc:walk({
+        traverse = "topdown",
+        Figure = skip,
+        Header = skip,
+        Link = skip,
+        Image = skip,
+        Inlines = link_mentions(ids),
+    })
 end

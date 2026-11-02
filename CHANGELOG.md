@@ -8,6 +8,8 @@ Released: [Place date of release here]
 
 - Figures: a warning when the numbers of the captions are not 1, 2, 3... in the order of the document (gap,
   duplicate, wrong order), e.g. after a figure is added.
+- Figures: a mention `Figure <number>` in the text is a link to the figure, with a warning if no figure has this
+  number.
 
 ### Changed
 

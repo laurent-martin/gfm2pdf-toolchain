@@ -147,9 +147,9 @@ class FiltersTest < Minitest::Test
     end.join("\n")
   end
 
-  # Warnings of the check of the figure numbers
+  # Warnings of common/figure_caption.lua
   def figure_warnings(markdown)
-    pandoc_warnings(markdown, 'html', 'native').last.lines.grep(/expected Figure/).map { |line| line[/Figure \d+ \(.*/] }
+    pandoc_warnings(markdown, 'html', 'native').last.lines.grep(/figure_caption\.lua/).map { |line| line[/column \d+: (.*)/, 1] }
   end
 
   def test_figure_numbers
@@ -170,6 +170,54 @@ class FiltersTest < Minitest::Test
     }.each do |form, (markdown, warnings)|
       assert_equal(warnings, figure_warnings(markdown), form)
     end
+  end
+
+  # Mentions before and after the figures, in parentheses, in lower case on two lines
+  def mentions
+    "See Figure 2.\n\n#{figures('Figure 1: a', 'Figure 2: b')}\nSee Figure 1, (Figure 2) and figure\n2.\n"
+  end
+
+  def test_figure_mention_link
+    latex = pandoc(mentions, 'latex', 'latex')
+    assert_includes(latex, '\caption{Figure 2: b}\label{fig-2}')
+    assert_includes(latex, 'See \hyperref[fig-2]{Figure 2}.')
+    assert_match(/See \\hyperref\[fig-1\]\{Figure 1\}, \(\\hyperref\[fig-2\]\{Figure 2\}\) and\s\\hyperref\[fig-2\]\{figure 2\}\./, latex)
+    typst = pandoc(mentions, 'typst', 'typst')
+    assert_match(/caption: \[\s*Figure 2: b\s*\]\s*\)\s*<fig-2>/, typst)
+    assert_match(/See #link\(<fig-1>\)\[Figure 1\], \(#link\(<fig-2>\)\[Figure 2\]\) and\s#link\(<fig-2>\)\[figure 2\]\./, typst)
+    html = pandoc(mentions, 'html', 'html5')
+    assert_includes(html, '<figure id="fig-1">')
+    assert_match(%r{See <a href="#fig-1">Figure 1</a>, \(<a href="#fig-2">Figure 2</a>\)\sand <a href="#fig-2">figure 2</a>\.}, html)
+    assert_empty(figure_warnings(mentions))
+  end
+
+  def test_figure_mention_not_linked
+    markdown = <<~MARKDOWN
+      ## Figure 1 in a heading
+
+      #{figures('Figure 1: a', 'Figure 2: b, unlike Figure 1')}
+      Figure 2 of RFC 1234, Figure 1.2, Figure 3a, Subfigure 1, Figures 1 and 2, [Figure 1](#x), `Figure 1`, ![Figure 1](x.png).
+    MARKDOWN
+    html = pandoc(markdown, 'html', 'html5')
+    refute_includes(html, 'href="#fig-')
+    assert_includes(html, '<figure id="fig-1">')
+    assert_empty(figure_warnings(markdown))
+  end
+
+  # No such figure: a warning per number, no link
+  def test_figure_mention_missing
+    markdown = "#{figures('Figure 1: a')}\nSee Figure 7, Figure 7 and Figure 8.\n"
+    refute_includes(pandoc(markdown, 'html', 'html5'), 'href="#fig-7"')
+    warnings = [7, 8].map { |number| "Figure #{number} mentioned in the text: no figure has this number" }
+    assert_equal(warnings, figure_warnings(markdown))
+  end
+
+  # Identifier `fig-1` taken by heading `Fig 1`: the figure gets another one
+  def test_figure_mention_identifier
+    html = pandoc("## Fig 1\n\n#{figures('Figure 1: a')}\nSee Figure 1.\n", 'html', 'html5')
+    assert_includes(html, '<h1 data-number="1" id="fig-1">')
+    assert_includes(html, '<figure id="fig-1-1">')
+    assert_includes(html, 'See <a href="#fig-1-1">Figure 1</a>.')
   end
 
   def test_table_auto_typst
