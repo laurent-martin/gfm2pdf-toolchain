@@ -136,6 +136,32 @@ class PdfTest < Minitest::Test
     check_theme('latex', 'LMSans')
   end
 
+  # Theme with another background on the last page, and its own text on the cover, 12 mm from the edges of the page
+  def check_theme_cover(engine)
+    with_fixtures do |dir|
+      pdf = dir / 'out/sample.pdf'
+      Gfm2Pdf.markdown_to_pdf(md: dir / 'sample.md', pdf: pdf, engine: engine, theme: dir / 'theme_cover')
+      assert_equal([200, 20], pdf_image_size(pdf, 1), 'background of the cover')
+      assert_equal([100, 10], pdf_image_size(pdf, pdf_pages(pdf)), 'background of the last page')
+      left, top = pdf_word_position(pdf, 1, 'Theme')
+      assert_in_delta(34, left, 2, 'left of the text of the cover')
+      assert_in_delta(34, top, 15, 'top of the text of the cover')
+      cover = Open3.capture2('pdftotext', '-f', '1', '-l', '1', pdf.to_s, '-').first
+      ['Theme cover', 'Sample document', 'Sample subtitle', 'Sample Author'].each { |expected| assert_includes(cover, expected) }
+      assert_includes(pdf_text(pdf), 'End of document')
+    end
+  end
+
+  def test_typst_theme_cover
+    require_command('typst')
+    check_theme_cover('typst')
+  end
+
+  def test_latex_theme_cover
+    require_command('lualatex')
+    check_theme_cover('latex')
+  end
+
   def test_html
     with_fixtures do |dir|
       html = dir / 'sample.html'

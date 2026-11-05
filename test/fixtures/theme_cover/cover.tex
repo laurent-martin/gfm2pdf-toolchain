@@ -1,0 +1,15 @@
+% Background of the cover page, other background on the last page, own text on the cover page
+\renewcommand{\gfmcoverbackground}{\AddToShipoutPictureBG*{
+    \AtPageUpperLeft{\raisebox{-\height}{\includegraphics[width=\paperwidth]{cover.png}}}
+  }}
+\renewcommand{\gfmlastbackground}{\AddToShipoutPictureBG*{
+    \AtPageLowerLeft{\includegraphics[width=\paperwidth]{last.png}}
+  }}
+\makeatletter
+\renewcommand{\maketitle}{\begin{titlepage}
+    \noindent Theme cover\par
+    \noindent\@title\par
+    \noindent\@author\par
+    \noindent\@date
+  \end{titlepage}}
+\makeatother

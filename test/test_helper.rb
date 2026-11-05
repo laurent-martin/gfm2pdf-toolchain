@@ -84,6 +84,32 @@ module TestHelper
     out.lines.drop(2).map { |line| line.split.first.to_i }.uniq
   end
 
+  # Size of the first raster image of a page of a PDF file
+  # @param pdf  [Pathname] PDF file
+  # @param page [Integer]  Page number
+  # @return [Array(Integer, Integer)] Width and height, in pixels
+  def pdf_image_size(pdf, page)
+    require_command('pdfimages')
+    out, status = Open3.capture2('pdfimages', '-list', '-f', page.to_s, '-l', page.to_s, pdf.to_s)
+    assert(status.success?)
+    # After the 2 heading lines, columns: page, num, type, width, height
+    out.lines[2].split.values_at(3, 4).map(&:to_i)
+  end
+
+  # Position of a word on a page of a PDF file
+  # @param pdf  [Pathname] PDF file
+  # @param page [Integer]  Page number
+  # @param word [String]   First occurrence of the word on the page
+  # @return [Array(Float, Float)] Left and top, in points
+  def pdf_word_position(pdf, page, word)
+    require_command('pdftotext')
+    out, status = Open3.capture2('pdftotext', '-bbox', '-f', page.to_s, '-l', page.to_s, pdf.to_s, '-')
+    assert(status.success?)
+    position = out[/<word xMin="([\d.]+)" yMin="([\d.]+)"[^>]*>#{Regexp.escape(word)}</, 0]
+    assert(position, "#{word} not found on page #{page}: #{out}")
+    [Regexp.last_match(1).to_f, Regexp.last_match(2).to_f]
+  end
+
   # Fonts of a PDF file
   # @param pdf [Pathname] PDF file
   # @return [String] Font list, one per line, with its PDF name, e.g. `LMSans10-Regular`

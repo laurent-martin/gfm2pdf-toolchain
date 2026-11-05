@@ -169,10 +169,18 @@ folder, e.g. in the repository of a project, with any of these files:
 | File | Content |
 | --- | --- |
 | `latex.yaml`, `typst.yaml`, `html.yaml` | `pandoc` defaults for this output, e.g. fonts, `${.}` is the folder of the theme |
-| `cover.tex` | PDF with LaTeX: background of the cover and last pages, redefines `\gfmcoverbackground` |
-| `cover.typ` | PDF with Typst: background of the cover and last pages, `cover-background` |
+| `cover.tex` | PDF with LaTeX: cover and last pages, see below |
+| `cover.typ` | PDF with Typst: cover and last pages, see below |
 
 Images in `cover.tex` and `cover.typ` are relative to the folder of the theme.
+
+`cover.tex` and `cover.typ` can set any of these:
+
+| Sets | `cover.tex` | `cover.typ` | Default |
+| --- | --- | --- | --- |
+| Background of the cover page | redefines `\gfmcoverbackground` | `cover-background` | none |
+| Background of the last page | redefines `\gfmlastbackground` | `last-background` | the one of the cover page |
+| Text of the cover page | redefines `\maketitle`, with `\@title`, `\@author` and `\@date` | `cover-text(title: none, subtitle: none, authors: (), date: none)`, on a page without margins | centered |
 
 Select the theme with the env var or `make` variable `GFM2PDF_THEME`. In a `Makefile`, set it before including
 `pandoc.mak`, so that the files of the theme are dependencies of the documents, and with `?=`, so that the env var
@@ -259,6 +267,40 @@ Example of a theme, with images at the top and bottom of the cover and last page
   separator row. With equal dashes (`| --- | --- |`), the widths are computed from the cell contents: each column
   gets at least its longest word, the rest is shared by text length. To set the widths yourself, tune the dashes,
   e.g. `| ---- | ------------------ |`.
+
+### Image size
+
+In a PDF, an image has its natural size, and shrinks only to fit the page. The natural size comes from the DPI in the
+file, and a PNG without DPI counts as 72 DPI: one pixel is one point. A screenshot of a high density screen is then
+larger than the page and shrinks to fill its width, whatever its size in pixels: two screenshots of the same
+application do not have the same scale, and a small dialog looks zoomed.
+
+For the same scale, set the DPI in the image files: both engines use it. For a PNG, with `exiftool` (the value is in
+pixels per meter: 15748 is 400 DPI) or `magick`:
+
+```shell
+exiftool -overwrite_original -PNG:PixelsPerUnitX=15748 -PNG:PixelsPerUnitY=15748 -PNG:PixelUnits=meters input.png
+magick input.png -units PixelsPerInch -density 400 output.png
+```
+
+Choose the value from the capture: for screenshots at 2x, 192 gives the size on the screen (14 px text is 10.5 pt),
+400 gives 60% of it (5 pt). Better to write it when the screenshots are captured, so that a new one has it too.
+
+With LaTeX only, a document can instead set the DPI of the images that have none in their file, in its
+[options](#options-of-a-document); the DPI of a file wins:
+
+```markdown
+<!-- gfm2pdf
+latex:
+  variables:
+    header-includes: '\pdfvariable imageresolution=400'
+-->
+```
+
+It applies to small icons too: this is why it goes in a document rather than in a theme.
+
+The `pandoc` option `dpi` does not change the size of these images. An image still larger than the page shrinks to fit
+it, so it is smaller than the others: crop it, or capture it narrower.
 
 ## Diagrams (draw.io)
 

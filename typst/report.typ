@@ -7,11 +7,16 @@
 
 #let emoji-font = sys.inputs.at("emoji-font", default: "Noto Color Emoji")
 
-// Background of the cover and last pages: from the theme, its images are relative to its folder
-#let cover-background = if "cover" in sys.inputs {
-  import sys.inputs.cover: cover-background
-  cover-background
+// Definitions of the cover.typ of the theme, all optional, see README.md. Its images are relative to its folder.
+#let theme = if "cover" in sys.inputs {
+  import sys.inputs.cover as cover
+  dictionary(cover)
+} else {
+  (:)
 }
+#let cover-background = theme.at("cover-background", default: none)
+#let last-background = theme.at("last-background", default: cover-background)
+#let cover-text = theme.at("cover-text", default: none)
 
 // Plain text of content, for PDF metadata
 #let to-string(it) = {
@@ -89,9 +94,6 @@
     for line in it.lines { code-line(line.body) }
   })
 
-  // Bold is rendered underlined (as in the LaTeX output)
-  show strong: it => underline(it.body)
-
   // Quotes: left bar, italic
   show quote.where(block: true): it => block(stroke: (left: 3pt), inset: (left: 10pt, y: 2pt), emph(it.body))
 
@@ -110,21 +112,28 @@
   show enum: set par(first-line-indent: 0pt)
   show terms: set par(first-line-indent: 0pt)
 
-  // Cover page
-  page(numbering: none, background: cover-background, {
-    set par(first-line-indent: 0pt)
-    align(center + horizon, {
-      if title != none { text(size: 1.7em, title) }
-      if subtitle != none { parbreak(); text(size: 1.1em, subtitle) }
-      v(2em)
-      for author in authors { author.name; linebreak() }
-      v(1em)
-      if date != none { date }
+  // Cover page: the theme places the text on a page without margins, else it is centered
+  if cover-text != none {
+    page(numbering: none, margin: 0pt, background: cover-background, {
+      set par(first-line-indent: 0pt, justify: false)
+      cover-text(title: title, subtitle: subtitle, authors: authors, date: date)
     })
-  })
+  } else {
+    page(numbering: none, background: cover-background, {
+      set par(first-line-indent: 0pt)
+      align(center + horizon, {
+        if title != none { text(size: 1.7em, title) }
+        if subtitle != none { parbreak(); text(size: 1.1em, subtitle) }
+        v(2em)
+        for author in authors { author.name; linebreak() }
+        v(1em)
+        if date != none { date }
+      })
+    })
+  }
 
   doc
 
   // Last page
-  page(numbering: none, background: cover-background, align(center + horizon, text(size: 2.5em)[End of document]))
+  page(numbering: none, background: last-background, align(center + horizon, text(size: 2.5em)[End of document]))
 }

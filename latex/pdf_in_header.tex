@@ -29,15 +29,14 @@ fontsize=\small
 \usepackage{svg}
 % https://ctan.org/pkg/eso-pic
 \usepackage{eso-pic}
-% Background of the cover and last pages: none, the cover.tex of a theme redefines it, see README.md
+% Background of the cover and last pages: none, the cover.tex of a theme redefines them, see README.md
 \providecommand{\gfmcoverbackground}{}
+\providecommand{\gfmlastbackground}{\gfmcoverbackground}
 \AtBeginDocument{\gfmcoverbackground}
 % Underline and highlight that can be nested, hyphenated and broken across lines (LuaLaTeX only)
 % https://ctan.org/pkg/lua-ul
 \usepackage{luacolor}
 \usepackage{lua-ul}
-% underline bold text
-\RenewDocumentCommand{\textbf}{m}{\underLine{#1}}
 % Place inline code on lightgray background (unlike \colorbox, can break across lines).
 \LuaULSetHighLightColor{lightgray}
 % Not \let: robust command, its inner macro is overwritten by \RenewDocumentCommand in LaTeX 2023.
