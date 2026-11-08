@@ -341,7 +341,8 @@ module Gfm2Pdf
   # @param engine [String]   PDF engine: `latex` or `typst`
   # @param theme  [String, Pathname, nil] Theme folder
   # @param mode   [String]   Mode of generation, see with_mode
-  def markdown_to_pdf(md:, pdf:, engine: default_engine, theme: default_theme, mode: default_mode)
+  # @param inputs [Hash]     Extra `--input` key-value pairs for `typst compile` (Typst engine only), e.g. `{"product-name" => "IBM Aspera on Cloud"}`
+  def markdown_to_pdf(md:, pdf:, engine: default_engine, theme: default_theme, mode: default_mode, inputs: {})
     raise ArgumentError, "Unknown PDF engine: #{engine}, expected one of: #{PDF_ENGINES.join(', ')}" unless PDF_ENGINES.include?(engine)
     theme = theme_folder(theme)
     md = Pathname.new(md).expand_path
@@ -354,9 +355,9 @@ module Gfm2Pdf
       with_source(md, 'pdf', engine, theme: theme) do |source, defaults, tmp|
         args = [*mode_args, "--variable=date:#{time.strftime('%Y/%m/%d')}", *defaults.map { |f| "--defaults=#{f}" }]
         if engine.eql?('latex')
-          pdf_with_latex(source, pdf, args, tmp, theme)
+          pdf_with_latex(source, pdf, args, tmp, theme, inputs: inputs)
         else
-          pdf_with_typst(source, pdf, args, time, md, theme)
+          pdf_with_typst(source, pdf, args, time, md, theme, inputs: inputs)
         end
       end
     end
@@ -367,12 +368,21 @@ module Gfm2Pdf
   # @param args   [Array<String>] Pandoc arguments
   # @param tmp    [Pathname] Temporary folder
   # @param theme  [Pathname, nil] Theme folder
-  def pdf_with_latex(source, pdf, args, tmp, theme)
+  # @param inputs [Hash] Additional key-value pairs exposed to `cover.tex` as `\gfminput{key}` commands
+  def pdf_with_latex(source, pdf, args, tmp, theme, inputs: {})
     # Folders of the images of LaTeX files, e.g. cover of the theme: https://latexref.xyz/_005cgraphicspath.html
     graphics_path = tmp / 'graphics_path.tex'
     graphics_path.write("\\usepackage{graphicx}\n\\graphicspath{#{[theme, '.'].compact.map { |dir| "{#{dir}/}" }.join}}\n")
+    # Extra inputs exposed as \gfminput{key} in cover.tex, before the cover so it can use \gfminput
+    headers = [graphics_path]
+    unless inputs.empty?
+      inputs_tex = tmp / 'inputs.tex'
+      inputs_tex.write(inputs.map { |k, v| "\\newcommand{\\gfminput#{latex_csname(k)}}{#{v}}\n" }.join)
+      headers << inputs_tex
+    end
     # After the defaults: headers follow the order of the arguments, and the cover of the theme redefines a command of latex/pdf_in_header.tex
-    headers = [graphics_path, theme_file(theme, 'cover.tex')].compact
+    headers << theme_file(theme, 'cover.tex')
+    headers.compact!
     # Fonts of the platform or of TeX Live only: luaotfload fails on a missing fallback font.
     # In order: emoji, then symbols. Before the defaults: the variables of a theme or a document replace them.
     fallbacks = SYMBOL_FONTS.flat_map { |name, font| [emoji_font, font].map { |fallback| "--variable=#{name}:#{fallback}:mode=harf" } }
@@ -382,18 +392,25 @@ module Gfm2Pdf
     FileUtils.rm_rf('svg-inkscape')
   end
 
+  # Convert an input key (e.g. "product-name") to a LaTeX command name suffix (e.g. "productname"):
+  # keep only letters and digits (LaTeX command names cannot contain hyphens or other punctuation).
+  def latex_csname(key)
+    key.gsub(/[^a-zA-Z0-9]/, '')
+  end
+
   # @param source [Pathname] Markdown file
   # @param pdf    [Pathname] Output PDF file
   # @param args   [Array<String>] Pandoc arguments
   # @param time   [Time] Creation date of the PDF, so that it changes only when the Markdown file changes
   # @param md     [Pathname] Original Markdown file
   # @param theme  [Pathname, nil] Theme folder
-  def pdf_with_typst(source, pdf, args, time, md, theme)
+  # @param inputs [Hash] Additional `--input` key-value pairs passed to `typst compile`, e.g. `{"product-name" => "IBM Aspera on Cloud"}`
+  def pdf_with_typst(source, pdf, args, time, md, theme, inputs: {})
     # Typst resolves image paths relative to the Typst file: it is next to the Markdown file
     typ = md.dirname / ".tmp.#{md.basename('.md')}.typ"
     run('pandoc', "--variable=template:#{ROOT / 'typst/report.typ'}", *args, "--output=#{typ}", source)
-    # Inputs of the template, the cover of the theme is imported by it
-    inputs = {'emoji-font' => emoji_font, 'cover' => theme_file(theme, 'cover.typ')}.compact
+    # Inputs of the template, the cover of the theme is imported by it; caller may add extra inputs
+    inputs = {'emoji-font' => emoji_font, 'cover' => theme_file(theme, 'cover.typ')}.merge(inputs).compact
     # Root `/`: the template, the theme and the images are in different folders
     command = ['typst', 'compile', '--root', '/', '--creation-timestamp', time.to_i, *inputs.flat_map { |name, value| ['--input', "#{name}=#{value}"] }, typ, pdf]
     return run(*command) unless args.include?('--fail-if-warnings')
