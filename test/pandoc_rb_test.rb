@@ -102,6 +102,92 @@ class PandocRbTest < Minitest::Test
     end
   end
 
+  DIAGRAM = "sequenceDiagram\n    title My flow\n    A->>B: hello\n"
+
+  # Only the diagrams that GitHub shows: not a block inside another one, not another language
+  def test_replace_mermaid
+    markdown = <<~MARKDOWN
+      Text.
+
+      ```mermaid
+      #{DIAGRAM.chomp}
+      ```
+
+      ````markdown
+      ```mermaid
+      graph TD
+      ```
+      ````
+
+      ```ruby
+      puts 1
+      ```
+
+      - item
+
+        ~~~mermaid
+        graph LR
+          A --> B
+        ~~~
+
+      ```mermaid
+      graph TD
+    MARKDOWN
+    found = []
+    after = Gfm2Pdf.replace_mermaid(markdown) { |indent, diagram, _| (found << [indent, diagram]).then { "#{indent}[diagram #{found.length}]\n" } }
+    assert_equal([['', DIAGRAM], ['  ', "graph LR\n  A --> B\n"]], found)
+    assert_equal(markdown.sub(/```mermaid\n#{Regexp.escape(DIAGRAM)}```/, '[diagram 1]').sub(/  ~~~mermaid.*?~~~/m, '  [diagram 2]'), after)
+    assert_equal('', Gfm2Pdf.replace_mermaid('') { raise 'no block' })
+  end
+
+  def test_mermaid_title
+    assert_equal('My flow', Gfm2Pdf.mermaid_title(DIAGRAM))
+    assert_equal('A title', Gfm2Pdf.mermaid_title("---\ntitle: A title\n---\ngraph TD\n"))
+    assert_equal('', Gfm2Pdf.mermaid_title("graph TD\n  A --> B\n"))
+  end
+
+  # Fake Mermaid CLI: copies the diagram to the output file, with the options of mmdc
+  def with_fake_mmdc
+    Dir.mktmpdir do |dir|
+      script = Pathname.new(dir) / 'mmdc'
+      script.write("#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in -i) i=$2; shift;; -o) o=$2; shift;; esac; shift; done\necho \"rendered\" > \"$o\"; cat \"$i\" >> \"$o\"\n")
+      script.chmod(0o755)
+      old = ENV.fetch('GFM2PDF_MMDC', nil)
+      ENV['GFM2PDF_MMDC'] = script.to_s
+      yield(Pathname.new(dir) / 'images')
+    ensure
+      old ? ENV['GFM2PDF_MMDC'] = old : ENV.delete('GFM2PDF_MMDC')
+    end
+  end
+
+  def test_render_mermaid
+    with_fake_mmdc do |folder|
+      text = Gfm2Pdf.render_mermaid("A\n\n```mermaid\n#{DIAGRAM}```\n\n- b\n\n  ```mermaid\n  #{DIAGRAM.gsub("\n", "\n  ").rstrip}\n  ```\n\n```mermaid\ngraph TD\n```\n", folder, 'pdf')
+      images = text.scan(/^( *)!\[([^\]]*)\]\(([^)]+)\)$/)
+      assert_equal(3, images.length)
+      assert_equal([['', 'My flow'], ['  ', 'My flow'], ['', '']], images.map { |i| i[0..1] })
+      assert_equal(images[0][2], images[1][2], 'same diagram, same image')
+      assert_equal(2, folder.glob('*.pdf').length)
+      assert_equal("rendered\n#{DIAGRAM}", Pathname.new(images[0][2]).read)
+      assert_equal(Pathname.new(images[0][2]).sub_ext('.mmd').read, DIAGRAM)
+      svg = Gfm2Pdf.render_mermaid("```mermaid\ngraph TD\n```\n", folder, 'svg')
+      assert_match(/\(.*mermaid-\h+\.svg\)/, svg)
+      assert_equal("no diagram\n", Gfm2Pdf.render_mermaid("no diagram\n", folder, 'pdf'))
+    end
+  end
+
+  def test_render_mermaid_not_found
+    ENV['GFM2PDF_MMDC'] = '/nonexistent/mmdc -q'
+    Dir.mktmpdir do |dir|
+      error = assert_raises(RuntimeError) { Gfm2Pdf.render_mermaid("```mermaid\ngraph TD\n```\n", Pathname.new(dir), 'pdf') }
+      assert_match(/mmdc not found: install Mermaid CLI/, error.message)
+      # no diagram: no need of the command
+      assert_equal("text\n", Gfm2Pdf.render_mermaid("text\n", Pathname.new(dir), 'pdf'))
+    end
+  ensure
+    ENV.delete('GFM2PDF_MMDC')
+  end
+
   def test_dependencies
     deps = Gfm2Pdf.dependencies(nil)
     %w[common/defaults.yaml latex/pdf_in_header.tex typst/report.typ lib/pandoc.rb].each do |file|
@@ -347,6 +433,15 @@ class PandocRbTest < Minitest::Test
       assert_equal(markdown, after, form)
       assert_equal(1, changes.length, form)
     end
+  end
+
+  # A diagram is an image: its manual caption is renumbered too
+  def test_renumber_figures_mermaid
+    markdown = "```mermaid\n#{DIAGRAM}```\n\n*Figure 5: Flow*\n\n![a](a.png)\n\n*Figure 9: a*\n\nSee Figure 9.\n"
+    after, changes, skipped = renumber(markdown)
+    assert_equal(markdown.sub('Figure 5', 'Figure 1').sub('Figure 9: a', 'Figure 2: a').sub('See Figure 9', 'See Figure 2'), after)
+    assert_equal(3, changes.length)
+    assert_empty(skipped)
   end
 
   # Inline code on two lines; a stray backtick does not start inline code up to the next paragraphs

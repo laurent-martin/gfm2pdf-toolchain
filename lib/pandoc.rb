@@ -12,6 +12,7 @@ require 'net/http'
 require 'open3'
 require 'pathname'
 require 'set'
+require 'shellwords'
 require 'tmpdir'
 require 'uri'
 require 'yaml'
@@ -295,6 +296,88 @@ module Gfm2Pdf
     end
   end
 
+  # Opening line of a fenced code block: indentation (list item), fence, info string
+  FENCE_START = /\A(?<indent>[ ]*)(?<fence>`{3,}|~{3,})(?<info>[^`\n]*)$/
+  # Command of Mermaid CLI (`mmdc`) when the env var `GFM2PDF_MMDC` is not set
+  MMDC_DEFAULT = 'mmdc'
+
+  # Replace the Mermaid diagrams of a Markdown text, i.e. the fenced code blocks ```` ```mermaid ````, that GitHub shows as
+  # diagrams. Other code blocks are kept, also a block ```` ```mermaid ```` shown inside another one.
+  # @param content [String] Markdown text
+  # @yieldparam indent  [String] Indentation of the block, e.g. in a list item
+  # @yieldparam diagram [String] Mermaid text, without the indentation
+  # @yieldparam finish  [Integer] Offset in `content` of the end of the closing fence, without its trailing spaces
+  # @yieldreturn [String] Markdown that replaces the block, with its indentation and a final newline
+  # @return [String] Markdown text
+  def replace_mermaid(content)
+    result = +''
+    opening = nil
+    block = []
+    offset = 0
+    content.each_line do |line|
+      offset += line.length
+      if opening.nil?
+        opening = FENCE_START.match(line.chomp)
+        opening ? block = [line] : result << line
+      else
+        block << line
+        next unless line.match?(/\A[ ]*#{Regexp.escape(opening[:fence][0])}{#{opening[:fence].length},}[ ]*\r?\n?\z/)
+        if opening[:info].strip.eql?('mermaid')
+          indent = opening[:indent]
+          result << yield(indent, block[1...-1].map { |l| l.sub(/\A[ ]{0,#{indent.length}}/, '') }.join, offset - line.length + line.rstrip.length)
+        else
+          result << block.join
+        end
+        opening = nil
+      end
+    end
+    result << block.join if opening
+    result
+  end
+
+  # @param text [String] Markdown text
+  # @return [Array<Integer>] Offsets of the end of the Mermaid diagrams (closing fence)
+  def mermaid_ends(text)
+    ends = []
+    replace_mermaid(text) { |_indent, _diagram, finish| (ends << finish).then { '' } }
+    ends
+  end
+
+  # @param diagram [String] Mermaid text
+  # @return [String] Title of the diagram (`title` of a sequence diagram, or of the front matter), for the alt text of its image
+  def mermaid_title(diagram)
+    title = diagram[/^[ \t]*title:?[ \t]+(\S.*?)[ \t]*$/, 1].to_s
+    title.delete('[]').delete_prefix('"').delete_suffix('"')
+  end
+
+  # Render the Mermaid diagrams of a Markdown text with Mermaid CLI: each diagram becomes an image
+  # `![title](<folder>/mermaid-<hash>.<format>)`. The command is `mmdc`, or the env var `GFM2PDF_MMDC` (with arguments, e.g.
+  # `npx -y @mermaid-js/mermaid-cli` or `mmdc -p puppeteer.json`).
+  # @param content [String]   Markdown text
+  # @param folder  [Pathname] Folder where the images are saved
+  # @param format  [String]   `pdf` (vector with text, for PDF engines) or `svg`
+  # @return [String] Markdown text with the diagrams replaced by images
+  # @raise [RuntimeError] if Mermaid CLI is not found, or if a diagram is not valid
+  def render_mermaid(content, folder, format)
+    command = Shellwords.split(ENV.fetch('GFM2PDF_MMDC', MMDC_DEFAULT))
+    files = {}
+    replace_mermaid(content) do |indent, diagram|
+      files[diagram] ||= begin
+        folder.mkpath
+        name = "mermaid-#{Digest::SHA256.hexdigest(diagram)[0, 16]}"
+        input = folder / "#{name}.mmd"
+        input.write(diagram)
+        output = folder / "#{name}.#{format}"
+        log.info { "Rendering Mermaid diagram: #{output.basename}" }
+        run(*command, '-q', '-i', input, '-o', output, *(format.eql?('svg') ? %w[-b transparent] : []), capture: true)
+        output
+      end
+      "#{indent}![#{mermaid_title(diagram)}](#{files[diagram]})\n"
+    end
+  rescue Errno::ENOENT
+    raise "#{command.first} not found: install Mermaid CLI (`npm install -g @mermaid-js/mermaid-cli`) or set GFM2PDF_MMDC"
+  end
+
   # Font for characters missing in the main fonts, e.g. emoji
   # @return [String]
   def emoji_font
@@ -321,6 +404,8 @@ module Gfm2Pdf
         content = convert_img_for_pandoc(md.read)
         # HTML references the remote images
         content = download_images(content, tmp / 'images') if output.eql?('pdf')
+        # Diagrams of GitHub: vector PDF for the PDF engines, SVG for HTML
+        content = render_mermaid(content, tmp / 'images', output.eql?('pdf') ? 'pdf' : 'svg')
         source.write(content)
         target = engine || output
         # The options of the theme come before the ones of the document
@@ -500,7 +585,7 @@ module Gfm2Pdf
     md = Pathname.new(md).expand_path
     ast = Dir.mktmpdir('pandoc') do |tmp|
       source = Pathname.new(tmp) / md.basename
-      source.write(convert_img_for_pandoc(md.read))
+      source.write(replace_mermaid(convert_img_for_pandoc(md.read)) { |indent, diagram| "#{indent}![#{mermaid_title(diagram)}](mermaid.svg)\n" })
       Dir.chdir(md.dirname) { JSON.parse(run('pandoc', "--defaults=#{ROOT / 'common/defaults.yaml'}", '--to=json', source, capture: true)) }
     end
     text = lambda do |node|
@@ -567,7 +652,9 @@ module Gfm2Pdf
     previous = text[0...line_start].lines.map(&:chomp).last(2)
     # an empty line between the image and the caption, in a quote or not
     previous.pop if previous.last&.match?(/\A[ \t>]*\z/)
-    previous.last&.match?(IMAGE_LINE) || false
+    return true if previous.last&.match?(IMAGE_LINE)
+    # a Mermaid diagram is an image: its block ends before the caption
+    mermaid_ends(text).include?(text[0...line_start].sub(/[ \t>\n]*\z/, '').length)
   end
 
   # Renumber the figures of a Markdown file: captions 1, 2, 3... in the order of the document, and the mentions

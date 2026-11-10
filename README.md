@@ -17,6 +17,7 @@ The PDF engine is LuaLaTeX (default) or [Typst](https://typst.app).
 | [`typst`](https://typst.app) | PDF with Typst | 0.15 |
 | GNU `make` | `pandoc.mak`, `drawio.mak` | 3.81 |
 | [draw.io desktop](https://www.drawio.com) | `drawio.mak` | |
+| [Mermaid CLI](https://github.com/mermaid-js/mermaid-cli) (`mmdc`, with a headless Chromium) | Mermaid diagrams in PDF and HTML | 12.2 |
 | [GitHub CLI](https://cli.github.com) (`gh`) | publication of a release | |
 
 Fonts: the default ones come with the PDF engine: Latin Modern (TeX Live), New Computer Modern (Typst), and DejaVu
@@ -325,6 +326,35 @@ README.pdf: $(DRAWIO_IMAGES)
 
 Optional variables, set before the `include`: `DRAWIO_FORMAT` (default: `svg`), `DRAWIO_OPTIONS` (draw.io CLI
 options, default: `--scale 2`).
+
+## Diagrams (Mermaid)
+
+A fenced code block `mermaid` is a diagram on GitHub, e.g. a sequence diagram:
+
+````markdown
+```mermaid
+sequenceDiagram
+    title Token request
+    Client->>+API: POST /token (JWT)
+    API-->>-Client: bearer token
+```
+````
+
+`pandoc` does not render it: before converting, the toolchain renders each diagram with
+[Mermaid CLI](https://github.com/mermaid-js/mermaid-cli) (`mmdc`) and replaces the block with an image: a vector PDF
+(text, not a bitmap) for the PDF engines, an SVG for HTML. The image is in a temporary folder: the Markdown file
+is the only source, and GitHub shows the same diagram.
+
+- The `title` of the diagram (a `title` line, or `title:` in its front matter) is the alt text of the image, like any
+  other image. As for an image, a paragraph `Figure <number>: ...` after the block is its caption, and
+  `renumber-figures` counts it.
+- A block `mermaid` shown inside another code block, e.g. in an example like the one above, is not rendered.
+- The command is `mmdc`, or the env var `GFM2PDF_MMDC`, with arguments, e.g. `GFM2PDF_MMDC="mmdc -t neutral"`
+  (theme), `GFM2PDF_MMDC="mmdc -p puppeteer.json"` (browser: `executablePath` of an installed Chrome,
+  `--no-sandbox` in a container), or `GFM2PDF_MMDC="npx -y @mermaid-js/mermaid-cli"`.
+- A document without diagram does not need `mmdc`. If it is needed and not found, or if a diagram is not valid, the
+  generation fails with the message of `mmdc`.
+- Each diagram starts a browser: about a second per diagram.
 
 ## Versions
 
