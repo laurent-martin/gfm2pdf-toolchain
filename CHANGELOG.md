@@ -19,7 +19,8 @@ Released: [Place date of release here]
   `make`, `check` and `fix` also generate the documents that are up to date.
 - Mermaid diagrams (fenced code block `mermaid`, shown as diagrams by GitHub) in PDF (LaTeX and Typst) and HTML: they are
   rendered with Mermaid CLI (`mmdc`, or env var `GFM2PDF_MMDC`) as vector PDF or SVG images. A manual caption
-  `Figure <number>` after a diagram is a figure caption, also for `renumber-figures`.
+  `Figure <number>` after a diagram is a figure caption, also for `renumber-figures`. If `mmdc` has no browser (Homebrew
+  formula), an installed Chrome, Chromium, Edge or Brave is used.
 - Themes: a background for the last page, other than the one of the cover (`\gfmlastbackground`, `last-background`),
   and the text of the cover page, e.g. left aligned (`\maketitle`, `cover-text`).
 

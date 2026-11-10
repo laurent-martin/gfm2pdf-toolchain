@@ -3,7 +3,8 @@
 Generate a PDF manual, or an HTML page, from a GitHub-flavored Markdown file, using `pandoc`.
 
 The same Markdown file renders on GitHub, and as a PDF report with a cover page, a table of contents, numbered
-chapters, admonition boxes, and tables and code that fit the page.
+chapters, admonition boxes, tables and code that fit the page, and [Mermaid diagrams](#diagrams-mermaid) and
+[draw.io diagrams](#diagrams-drawio).
 
 The PDF engine is LuaLaTeX (default) or [Typst](https://typst.app).
 
@@ -17,7 +18,7 @@ The PDF engine is LuaLaTeX (default) or [Typst](https://typst.app).
 | [`typst`](https://typst.app) | PDF with Typst | 0.15 |
 | GNU `make` | `pandoc.mak`, `drawio.mak` | 3.81 |
 | [draw.io desktop](https://www.drawio.com) | `drawio.mak` | |
-| [Mermaid CLI](https://github.com/mermaid-js/mermaid-cli) (`mmdc`, with a headless Chromium) | Mermaid diagrams in PDF and HTML | 12.2 |
+| [Mermaid CLI](https://github.com/mermaid-js/mermaid-cli) (`mmdc`, and a browser: Chrome or Chromium; macOS: `brew install mermaid-cli`) | Mermaid diagrams in PDF and HTML | 12.2 |
 | [GitHub CLI](https://cli.github.com) (`gh`) | publication of a release | |
 
 Fonts: the default ones come with the PDF engine: Latin Modern (TeX Live), New Computer Modern (Typst), and DejaVu
@@ -110,6 +111,7 @@ Variables of `pandoc.mak` start with `GFM2PDF_`, so that they do not change the 
 | Long lines in code blocks | wrapped, continuation lines indented with `↪` | same |
 | SVG images | converted by `inkscape` | native |
 | draw.io diagrams (`drawio.mak`) | PDF exported by draw.io | same |
+| Mermaid diagrams | PDF rendered by `mmdc` | same |
 | Tagged PDF (accessibility) | no | yes |
 | Same PDF for the same Markdown file | yes | yes |
 
@@ -349,6 +351,10 @@ is the only source, and GitHub shows the same diagram.
   other image. As for an image, a paragraph `Figure <number>: ...` after the block is its caption, and
   `renumber-figures` counts it.
 - A block `mermaid` shown inside another code block, e.g. in an example like the one above, is not rendered.
+- `mmdc` drives a browser. If it has none of its own (e.g. the Homebrew formula `mermaid-cli`: `Could not find
+  chrome-headless-shell`), the toolchain uses an installed Chrome, Chromium, Edge or Brave (`/Applications` on macOS,
+  or `google-chrome`, `chromium` in the PATH). To choose another one, set the env var `PUPPETEER_EXECUTABLE_PATH`.
+  If there is none, install one: `npx puppeteer browsers install chrome-headless-shell`.
 - The command is `mmdc`, or the env var `GFM2PDF_MMDC`, with arguments, e.g. `GFM2PDF_MMDC="mmdc -t neutral"`
   (theme), `GFM2PDF_MMDC="mmdc -p puppeteer.json"` (browser: `executablePath` of an installed Chrome,
   `--no-sandbox` in a container), or `GFM2PDF_MMDC="npx -y @mermaid-js/mermaid-cli"`.

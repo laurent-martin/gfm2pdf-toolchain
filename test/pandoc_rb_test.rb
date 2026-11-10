@@ -176,6 +176,49 @@ class PandocRbTest < Minitest::Test
     end
   end
 
+  # Fake Mermaid CLI that works only with a browser given by PUPPETEER_EXECUTABLE_PATH
+  def with_browserless_mmdc
+    Dir.mktmpdir do |dir|
+      script = Pathname.new(dir) / 'mmdc'
+      script.write("#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in -o) o=$2; shift;; esac; shift; done\n" \
+                   "[ -n \"$PUPPETEER_EXECUTABLE_PATH\" ] || { echo 'Error: Could not find chrome-headless-shell' >&2; exit 1; }\necho \"$PUPPETEER_EXECUTABLE_PATH\" > \"$o\"\n")
+      script.chmod(0o755)
+      ENV['GFM2PDF_MMDC'] = script.to_s
+      ENV.delete('PUPPETEER_EXECUTABLE_PATH')
+      yield(Pathname.new(dir) / 'images')
+    ensure
+      ENV.delete('GFM2PDF_MMDC')
+    end
+  end
+
+  # No browser for Mermaid CLI: an installed one is used, else the message tells what to do
+  def test_render_mermaid_browser
+    with_browserless_mmdc do |folder|
+      Gfm2Pdf.define_singleton_method(:find_browser) { '/usr/bin/some-chrome' }
+      text = Gfm2Pdf.render_mermaid("```mermaid\ngraph TD\n```\n", folder, 'pdf')
+      assert_equal("/usr/bin/some-chrome\n", Pathname.new(text[/\((.*)\)/, 1]).read)
+      Gfm2Pdf.define_singleton_method(:find_browser) { nil }
+      error = assert_raises(RuntimeError) { Gfm2Pdf.render_mermaid("```mermaid\ngraph LR\n```\n", folder, 'pdf') }
+      assert_match(/Could not find chrome-headless-shell.*PUPPETEER_EXECUTABLE_PATH/m, error.message)
+    ensure
+      Gfm2Pdf.singleton_class.send(:remove_method, :find_browser)
+    end
+  end
+
+  def test_find_browser
+    Dir.mktmpdir do |dir|
+      chromium = Pathname.new(dir) / 'chromium'
+      chromium.write("#!/bin/sh\n")
+      chromium.chmod(0o755)
+      old = ENV.fetch('PATH')
+      ENV['PATH'] = dir
+      found = Gfm2Pdf.find_browser
+      assert(found.eql?(chromium.to_s) || found.start_with?('/Applications/'), found)
+    ensure
+      ENV['PATH'] = old
+    end
+  end
+
   def test_render_mermaid_not_found
     ENV['GFM2PDF_MMDC'] = '/nonexistent/mmdc -q'
     Dir.mktmpdir do |dir|

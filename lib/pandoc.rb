@@ -45,16 +45,17 @@ module Gfm2Pdf
   # Execute a command (not in a shell)
   # @param cmd     [Array] Command and arguments
   # @param capture [Boolean] Return the standard output instead of displaying it
+  # @param env     [Hash]    Environment variables to add
   # @return [String, nil] Standard output if `capture`
   # @raise [RuntimeError] if the command fails
-  def run(*cmd, capture: false)
+  def run(*cmd, capture: false, env: {})
     cmd = cmd.map(&:to_s)
     log.info { "Executing: #{cmd.join(' ')}" }
     unless capture
-      system(*cmd, exception: true)
+      system(env, *cmd, exception: true)
       return
     end
-    out, err, status = Open3.capture3(*cmd)
+    out, err, status = Open3.capture3(env, *cmd)
     raise "#{cmd.first}: #{err.strip}" unless status.success?
     out
   end
@@ -369,13 +370,45 @@ module Gfm2Pdf
         input.write(diagram)
         output = folder / "#{name}.#{format}"
         log.info { "Rendering Mermaid diagram: #{output.basename}" }
-        run(*command, '-q', '-i', input, '-o', output, *(format.eql?('svg') ? %w[-b transparent] : []), capture: true)
+        run_mmdc(command, ['-q', '-i', input, '-o', output, *(format.eql?('svg') ? %w[-b transparent] : [])])
         output
       end
       "#{indent}![#{mermaid_title(diagram)}](#{files[diagram]})\n"
     end
   rescue Errno::ENOENT
     raise "#{command.first} not found: install Mermaid CLI (`npm install -g @mermaid-js/mermaid-cli`) or set GFM2PDF_MMDC"
+  end
+
+  # Browsers that Mermaid CLI can drive, in order of preference: paths (macOS), then commands in the PATH
+  BROWSERS = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'
+  ].freeze
+
+  # @return [String, nil] Path of the first browser of BROWSERS that is installed, nil if none
+  def find_browser
+    BROWSERS.each do |browser|
+      return browser if browser.start_with?('/') && File.executable?(browser)
+      found = ENV.fetch('PATH', '').split(File::PATH_SEPARATOR).map { |dir| File.join(dir, browser) }.find { |f| File.executable?(f) }
+      return found if found && !browser.start_with?('/')
+    end
+    nil
+  end
+
+  # Run Mermaid CLI. If it has no browser of its own (e.g. Homebrew formula), retry with an installed one, unless the env
+  # var `PUPPETEER_EXECUTABLE_PATH` is set.
+  # @param command [Array<String>] Command of Mermaid CLI
+  # @param args    [Array]         Arguments
+  # @raise [RuntimeError] if the command fails
+  def run_mmdc(command, args)
+    run(*command, *args, capture: true)
+  rescue RuntimeError => e
+    raise unless e.message.include?('Could not find')
+    browser = ENV.fetch('PUPPETEER_EXECUTABLE_PATH', '').empty? ? find_browser : nil
+    raise "#{e.message}\nMermaid CLI needs a browser: set the env var PUPPETEER_EXECUTABLE_PATH to Chrome, or install one with `npx puppeteer browsers install chrome-headless-shell`" unless browser
+    log.info { "Using the browser: #{browser}" }
+    run(*command, *args, capture: true, env: {'PUPPETEER_EXECUTABLE_PATH' => browser})
   end
 
   # Font for characters missing in the main fonts, e.g. emoji
